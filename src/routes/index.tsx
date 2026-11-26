@@ -31,11 +31,11 @@ function Home() {
             Розширення для Chrome
           </p>
           <h1 className="font-serif text-4xl leading-tight font-semibold text-ink sm:text-6xl">
-            Copy to AI
+            Вся сторінка, не лише екран
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-muted">
-            Повний скріншот сторінки, разом із тим, що нижче екрана. Скачуєте
-            PNG або PDF і завантажуєте файл у будь-який AI.
+            Натискаєте іконку — Whole Page знімає сторінку разом із тим, що нижче,
+            і відкриває її, щоб скачати PNG або PDF.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <a
@@ -69,7 +69,7 @@ function Home() {
           <h2 className="font-serif text-3xl font-semibold">Як знімати</h2>
           <ol className="mt-4 flex flex-col gap-3 text-base leading-relaxed">
             <li>Відкрийте звичайну статтю, документ або лендінг.</li>
-            <li>Натисніть іконку Copy to AI або Alt+Shift+Y.</li>
+            <li>Натисніть іконку Whole Page або Alt+Shift+Y.</li>
             <li>
               Зачекайте. Chrome на мить напише, що сторінку налагоджують — так
               знімок виходить цілісним, без швів.

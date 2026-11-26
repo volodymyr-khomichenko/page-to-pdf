@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Copy to AI — Full Page Screenshot",
-  "description": "Знімає всю сторінку вниз і зберігає PNG або PDF, щоб закинути файл в AI.",
+  "name": "Whole Page",
+  "description": "Знімає всю сторінку вниз і зберігає PNG або PDF.",
   "version": "1.0.0",
   "action": {
-    "default_title": "Зняти всю сторінку для AI",
+    "default_title": "Зняти всю сторінку",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -22,7 +22,7 @@
         "default": "Alt+Shift+Y",
         "mac": "Alt+Shift+Y"
       },
-      "description": "Зняти всю сторінку для AI"
+      "description": "Зняти всю сторінку"
     }
   },
   "icons": {
