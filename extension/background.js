@@ -1,4 +1,4 @@
-import { hideOverlays, preparePage, restorePage, waitForFrames } from "./page-fns.js";
+import { framesNeedWait, hideOverlays, preparePage, restorePage } from "./page-fns.js";
 import { putShot } from "./idb.js";
 
 const busy = new Set();
@@ -282,6 +282,45 @@ async function cropSlice(bytes, cssTop, cssHeight, cssViewport) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+async function waitForSlice(tabId) {
+  const pending = await evaluate(tabId, framesNeedWait);
+  if (!pending) return;
+  let inflight = 0;
+  let idleAt = Date.now();
+  const onEvent = (source, method) => {
+    if (source.tabId !== tabId) return;
+    if (method === "Network.requestWillBeSent") {
+      inflight += 1;
+      idleAt = Date.now() + 100000;
+    } else if (method === "Network.loadingFinished" || method === "Network.loadingFailed") {
+      inflight = Math.max(0, inflight - 1);
+      if (inflight === 0) idleAt = Date.now();
+    }
+  };
+  chrome.debugger.onEvent.addListener(onEvent);
+  try {
+    await send(tabId, "Network.enable", {});
+  } catch {
+    /* network domain is optional */
+  }
+  const deadline = Date.now() + 6000;
+  try {
+    while (Date.now() < deadline) {
+      const still = await evaluate(tabId, framesNeedWait);
+      const idle = inflight === 0 && Date.now() - idleAt >= 500;
+      if (!still && idle) return;
+      await sleep(150);
+    }
+  } finally {
+    chrome.debugger.onEvent.removeListener(onEvent);
+    try {
+      await send(tabId, "Network.disable", {});
+    } catch {
+      /* already off */
+    }
+  }
+}
+
 async function hideForSlice(tabId) {
   const report = await evaluate(tabId, hideOverlays);
   if (report?.count) {
@@ -305,7 +344,7 @@ async function captureSurface(tabId, info) {
     guard += 1;
     const pos = await settleScroll(tabId, covered);
     if (covered > 0) await hideForSlice(tabId);
-    await evaluate(tabId, waitForFrames);
+    await waitForSlice(tabId);
     const docEnd = Math.min(cssHeight, pos.y + pos.viewport);
     const start = Math.max(covered, pos.y);
     const keep = docEnd - start;
@@ -333,7 +372,7 @@ async function scrollStitch(tab, cssHeight) {
     try {
       const settled = await settleScroll(tab.id, covered);
       if (covered > 0) await hideForSlice(tab.id);
-      await evaluate(tab.id, waitForFrames);
+      await waitForSlice(tab.id);
       pos = {
         y: settled.y,
         viewport: settled.viewport,

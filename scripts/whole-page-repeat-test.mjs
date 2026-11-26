@@ -1,6 +1,7 @@
 import { chromium } from "playwright";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 
 const pages = [
   ["mdn", "https://developer.mozilla.org/en-US/docs/Web/CSS/position"],
@@ -9,10 +10,11 @@ const pages = [
   ["github", "https://docs.github.com/en/get-started/start-your-journey/hello-world"],
 ];
 
-const ext = "/workspace/extension";
-const context = await chromium.launchPersistentContext(`/tmp/wp105-${Date.now()}`, {
+const extArg = process.argv.find((item) => item.startsWith("--ext="));
+const ext = path.resolve(extArg ? extArg.slice("--ext=".length) : process.env.PAGE_TO_PDF_EXT || "./extension");
+const context = await chromium.launchPersistentContext(`/tmp/wp106-${Date.now()}`, {
   headless: false,
-  viewport: { width: 1720, height: 900 },
+  viewport: { width: 1920, height: 900 },
   args: [
     "--headless=new",
     `--disable-extensions-except=${ext}`,
@@ -47,12 +49,12 @@ def dark(x0, x1, y0, y1):
                 n += 1
     return n
 fails = []
-left0 = dark(24, 260, 80, min(slice_h, im.height))
+left0 = dark(16, 380, 80, min(slice_h, im.height))
 right0 = dark(im.width - 280, im.width - 24, 80, min(slice_h, im.height))
 print(json.dumps({"name": name, "size": im.size, "slice": slice_h, "left0": left0, "right0": right0}))
 y = slice_h
 while y + slice_h <= im.height + 30:
-    left = dark(24, 260, y + 40, y + slice_h - 20)
+    left = dark(16, 380, y + 40, y + slice_h - 20)
     right = dark(im.width - 280, im.width - 24, y + 40, y + slice_h - 20)
     print(json.dumps({"band": y, "L": left, "R": right}))
     if left0 > 25 and left > left0 * 0.45:
@@ -60,8 +62,43 @@ while y + slice_h <= im.height + 30:
     if right0 > 25 and right > right0 * 0.45:
         fails.append(f"{name}: right rail repeated at y={y} ({right} vs {right0})")
     y += slice_h
-if im.height == 16384 and im.height < slice_h * 3:
+if im.height == 16384:
     fails.append(f"{name}: image is stuck at the 16384 canvas cap")
+def cols_at(y0):
+    cols = 0
+    yy = min(im.height - 1, y0 + 18)
+    for x in range(60, im.width - 60, 10):
+        p = im.getpixel((x, yy))
+        if p[0] < 160 and p[1] < 160 and p[2] < 170:
+            cols += 1
+    return cols
+h0 = cols_at(0)
+y = slice_h
+while y + slice_h <= im.height + 30:
+    got = cols_at(y)
+    if h0 > 28 and got > h0 * 0.55:
+        fails.append(f"{name}: header repeated at y={y} ({got} vs {h0})")
+    y += slice_h
+if name == "react":
+    found = None
+    y = 2800
+    while y < im.height - 220:
+        editor = dark(int(im.width * 0.28), int(im.width * 0.52), y, y + 180)
+        sat = 0
+        total = 0
+        for yy in range(y, min(im.height, y + 180), 3):
+            for x in range(int(im.width * 0.55), int(im.width * 0.84), 4):
+                p = im.getpixel((x, yy))
+                total += 1
+                if max(p[:3]) - min(p[:3]) > 45 and max(p[:3]) > 90:
+                    sat += 1
+        if editor > 70 and sat > 8:
+            found = (y, sat, total)
+            break
+        y += 90
+    print(json.dumps({"sandpack": found}))
+    if not found:
+        fails.append("react: sandpack preview not found or blank")
 print("FAILS")
 print("\\n".join(fails))
 `, name, String(metrics.vw), String(metrics.vh), file],

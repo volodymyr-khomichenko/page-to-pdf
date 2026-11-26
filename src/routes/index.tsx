@@ -46,7 +46,7 @@ function Home() {
               <Download className="size-5" aria-hidden="true" />
               Скачати розширення
             </a>
-            <p className="text-sm text-muted">Версія 1.0.5. Без акаунта і без реклами.</p>
+            <p className="text-sm text-muted">Версія 1.0.6. Без акаунта і без реклами.</p>
           </div>
         </div>
         <div className="lg:col-span-2">

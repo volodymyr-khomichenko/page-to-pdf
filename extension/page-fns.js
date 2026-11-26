@@ -75,6 +75,13 @@ export async function preparePage() {
       new Promise((resolve) => setTimeout(resolve, 700)),
     ]);
   }
+  const pause = Math.max(280, Math.floor(vh * 0.85));
+  const warmLimit = Math.min(root.scrollHeight, CAP);
+  for (let y = 0; y < warmLimit; y += pause) {
+    root.scrollTop = y;
+    window.scrollTo(0, y);
+    await new Promise((resolve) => setTimeout(resolve, 160));
+  }
   window.scrollTo(0, 0);
   root.scrollTop = 0;
   document.documentElement.scrollTop = 0;
@@ -99,7 +106,7 @@ export async function preparePage() {
   };
 }
 
-export function hideOverlays() {
+export async function hideOverlays() {
   const CAP = 25000;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -190,46 +197,111 @@ export function hideOverlays() {
 
   if (!document.body) return { count: 0, names: [] };
   const content = textColumn();
-  const sticky = [];
-  const visit = {
-    count: 0,
-    fn(el) {
-      const pos = getComputedStyle(el).position;
-      if (pos === "fixed" || pos === "sticky") sticky.push(el);
-    },
-  };
-  walk(document, visit);
 
-  for (const el of sticky) {
-    if (inDemo(el)) continue;
-    const rect = el.getBoundingClientRect();
-    if (rect.width < 8 || rect.height < 8) continue;
-    if (rect.width > vw * 0.92 && rect.height > vh * 0.92) continue;
+  function overlapRatio(rect) {
     const overlap = Math.max(
       0,
       Math.min(rect.right, content.right) - Math.max(rect.left, content.left),
     );
-    const overlapRatio = content.width > 0 ? overlap / content.width : 1;
-    const center = (content.left + content.right) / 2;
-    const coversCenter = rect.left <= center && rect.right >= center;
-    const bar = rect.height <= 180 && rect.width >= vw * 0.45 && (coversCenter || overlapRatio >= 0.15);
-    const side =
-      overlapRatio < 0.15 &&
-      rect.width <= vw * 0.5 &&
-      rect.width >= 40 &&
-      rect.height >= 40;
-    const widget =
-      rect.width <= 280 &&
-      rect.height <= 280 &&
-      (rect.left <= 20 || rect.right >= vw - 20) &&
-      (rect.top <= 20 || rect.bottom >= vh - 20);
-    if (bar || side || widget) mark(el);
+    return content.width > 0 ? overlap / content.width : 1;
   }
+
+  function outside(rect) {
+    if (rect.width < 8 || rect.height < 8) return false;
+    if (rect.width > vw * 0.55) return false;
+    return overlapRatio(rect) < 0.15;
+  }
+
+  function topPinned(el) {
+    let top = null;
+    let node = el;
+    while (node && node !== document.body && node !== document.documentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.position === "sticky" || cs.position === "fixed") top = node;
+      node = node.parentElement;
+    }
+    return top;
+  }
+
+  function isBar(rect) {
+    const center = (content.left + content.right) / 2;
+    const covers = rect.left <= center && rect.right >= center;
+    return rect.height <= 180 && rect.width >= vw * 0.45 && (covers || overlapRatio(rect) >= 0.15);
+  }
+
+  function consider(el, fromStuck) {
+    if (!el || inDemo(el)) return;
+    const pin = topPinned(el);
+    const own = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const selfPinned = cs.position === "sticky" || cs.position === "fixed";
+    const scroller =
+      (cs.overflowY === "auto" || cs.overflowY === "scroll") &&
+      own.height >= vh * 0.55 &&
+      own.height <= vh * 1.25;
+    const pinRect = pin ? pin.getBoundingClientRect() : null;
+    if (pin && isBar(pinRect)) {
+      mark(pin);
+      return;
+    }
+    if (selfPinned && isBar(own)) {
+      mark(el);
+      return;
+    }
+    if (pin && outside(pinRect)) mark(pin);
+    if ((selfPinned || scroller) && outside(own)) mark(el);
+    if (fromStuck && outside(own) && own.width <= 56 && own.height <= 56) mark(el);
+  }
+
+  const seen = [];
+  const visit = {
+    count: 0,
+    fn(el) {
+      if (inDemo(el) || seen.length > 400) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) return;
+      if (rect.bottom < 0 || rect.top > vh || rect.right < 0 || rect.left > vw) return;
+      const cs = getComputedStyle(el);
+      const sticky = cs.position === "sticky" || cs.position === "fixed";
+      const scroller =
+        (cs.overflowY === "auto" || cs.overflowY === "scroll") && rect.height >= vh * 0.5;
+      const edgeToggle = rect.width <= 48 && rect.height <= 48 && (rect.left <= 28 || rect.right >= vw - 28);
+      if (sticky || scroller || edgeToggle) seen.push(el);
+    },
+  };
+  walk(document, visit);
+
+  async function nudge() {
+    const root = document.scrollingElement || document.documentElement;
+    const y0 = root.scrollTop || 0;
+    const maxScroll = Math.max(0, root.scrollHeight - vh);
+    let delta = 120;
+    if (y0 + delta > maxScroll - 1) delta = y0 > 120 ? -120 : 0;
+    if (!delta) return [];
+    const before = seen.map((el) => {
+      const rect = el.getBoundingClientRect();
+      return { el, top: rect.top, left: rect.left };
+    });
+    root.scrollTop = y0 + delta;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const stuck = [];
+    for (const item of before) {
+      const rect = item.el.getBoundingClientRect();
+      if (Math.abs(rect.top - item.top) <= 2 && Math.abs(rect.left - item.left) <= 2) stuck.push(item.el);
+    }
+    root.scrollTop = y0;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return stuck;
+  }
+
+  const stuck = new Set(await nudge());
+  for (const el of seen) consider(el, stuck.has(el));
+  for (const el of await nudge()) consider(el, true);
 
   return { count: names.length, names: names.slice(0, 16), span: content };
 }
 
-export function waitForFrames() {
+export function framesNeedWait() {
   const frames = [];
   function walk(root) {
     if (!root?.querySelectorAll || frames.length > 40) return;
@@ -239,33 +311,23 @@ export function waitForFrames() {
     }
   }
   walk(document);
-  const visible = frames.filter((frame) => {
+  let waiting = 0;
+  for (const frame of frames) {
     const rect = frame.getBoundingClientRect();
-    return rect.width >= 64 && rect.bottom > 8 && rect.top < window.innerHeight - 8;
-  });
-  if (!visible.length) return Promise.resolve(0);
-  const started = performance.now();
-  return new Promise((resolve) => {
-    const tick = () => {
-      const waiting = visible.filter((frame) => {
-        const rect = frame.getBoundingClientRect();
-        if (rect.bottom < 0 || rect.top > window.innerHeight) return false;
-        if (rect.height < 100) return true;
-        try {
-          const doc = frame.contentDocument;
-          if (doc && doc.readyState !== "complete") return true;
-        } catch {
-          return false;
-        }
-        return false;
-      });
-      if (!waiting.length || performance.now() - started > 1500) resolve(visible.length);
-      else requestAnimationFrame(tick);
-    };
-    tick();
-  });
+    if (rect.width < 180 || rect.bottom < 8 || rect.top > window.innerHeight - 8) continue;
+    if (rect.height < 120) {
+      waiting += 1;
+      continue;
+    }
+    try {
+      const doc = frame.contentDocument;
+      if (doc && doc.readyState !== "complete") waiting += 1;
+    } catch {
+      /* cross-origin and already tall */
+    }
+  }
+  return waiting;
 }
-
 export function restorePage() {
   function restoreTree(root) {
     if (!root?.querySelectorAll) return;
