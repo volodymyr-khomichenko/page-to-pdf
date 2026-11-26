@@ -144,6 +144,50 @@ function looksLikeViewportOnly(bytes, expectedPx, viewportPx) {
   return size.height < viewportPx * 1.35;
 }
 
+async function settleScroll(tabId, target) {
+  const want = Math.max(0, Math.round(target));
+  let last = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const result = await send(tabId, "Runtime.evaluate", {
+      expression: `(() => new Promise((resolve) => {
+        const want = ${want};
+        const root = document.scrollingElement || document.documentElement;
+        const maxScroll = Math.max(0, root.scrollHeight - window.innerHeight);
+        const y = Math.min(want, maxScroll);
+        document.documentElement.style.scrollBehavior = "auto";
+        window.scrollTo(0, y);
+        root.scrollTop = y;
+        document.documentElement.scrollTop = y;
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          setTimeout(() => {
+            const now = document.scrollingElement || document.documentElement;
+            resolve({
+              scrollY: window.scrollY || 0,
+              scrollTop: now.scrollTop || 0,
+              y,
+              maxScroll,
+              viewport: window.innerHeight,
+            });
+          }, 80);
+        }));
+      }))()`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (result.exceptionDetails) throw new Error("Не вдалося прокрутити сторінку");
+    last = result.result?.value;
+    if (
+      last &&
+      Math.abs(last.scrollY - last.y) <= 1 &&
+      Math.abs(last.scrollTop - last.y) <= 1
+    ) {
+      return last;
+    }
+  }
+  if (!last) throw new Error("Не вдалося прокрутити сторінку");
+  return last;
+}
+
 async function grab(tabId, params) {
   const result = await send(tabId, "Page.captureScreenshot", {
     format: "png",
@@ -179,6 +223,7 @@ async function captureSurface(tabId, info) {
   const oneScreen = cssHeight <= viewportCss * 1.05;
 
   if (oneScreen) {
+    await settleScroll(tabId, 0);
     const raw = await grab(tabId, {});
     if (!looksLikeViewportOnly(raw, cssHeight * Math.min(info.dpr || 1, 2), viewportPx)) {
       return shotToPng([await cropWidth(raw, cssWidth, cssHeight)]);
@@ -194,15 +239,17 @@ async function captureSurface(tabId, info) {
   const tiles = [];
   for (let y = 0; y < cssHeight; y += TILE_CSS) {
     if (y > 0) await evaluate(tabId, hideOverlays);
-    const height = Math.min(TILE_CSS, cssHeight - y);
+    const pos = await settleScroll(tabId, y);
+    const clipY = y <= pos.maxScroll + 1 ? pos.y : y;
+    const height = Math.min(TILE_CSS, cssHeight - clipY);
     const tile = await grab(tabId, {
-      clip: { x: 0, y, width: cssWidth, height, scale },
+      clip: { x: 0, y: clipY, width: cssWidth, height, scale },
     });
     if (y === 0 && looksLikeViewportOnly(tile, height * scale, viewportPx)) return null;
     tiles.push(tile);
     await chrome.action.setBadgeText({
       tabId,
-      text: `${Math.round((Math.min(cssHeight, y + height) / cssHeight) * 100)}`,
+      text: `${Math.round((Math.min(cssHeight, clipY + height) / cssHeight) * 100)}`,
     });
   }
   return shotToPng(tiles);
@@ -218,19 +265,12 @@ async function scrollStitch(tab, cssHeight) {
     let pos;
     try {
       if (covered > 0) await evaluate(tab.id, hideOverlays);
-      const placed = await send(tab.id, "Runtime.evaluate", {
-        expression: `(() => {
-          const root = document.scrollingElement || document.documentElement;
-          const cap = ${Math.round(cssHeight)};
-          const height = Math.min(root.scrollHeight, cap);
-          const maxScroll = Math.max(0, height - window.innerHeight);
-          root.scrollTop = Math.min(${Math.round(covered)}, maxScroll);
-          return { y: root.scrollTop || 0, viewport: window.innerHeight, height };
-        })()`,
-        returnByValue: true,
-      });
-      if (placed.exceptionDetails) throw new Error("Не вдалося прокрутити сторінку");
-      pos = placed.result.value;
+      const settled = await settleScroll(tab.id, covered);
+      pos = {
+        y: settled.y,
+        viewport: settled.viewport,
+        height: Math.min(cssHeight, settled.maxScroll + settled.viewport),
+      };
     } finally {
       await detach(tab.id);
     }

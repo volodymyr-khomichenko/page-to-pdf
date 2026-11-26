@@ -23,6 +23,11 @@ export async function preparePage() {
   if (!document.documentElement.dataset.wpScroll) {
     document.documentElement.dataset.wpScroll = String(root.scrollTop || 0);
   }
+  if (document.documentElement.dataset.wpScrollBehavior === undefined) {
+    document.documentElement.dataset.wpScrollBehavior =
+      document.documentElement.style.scrollBehavior || "";
+  }
+  document.documentElement.style.scrollBehavior = "auto";
 
   if (!document.getElementById("wp-hide-style")) {
     const style = document.createElement("style");
@@ -70,10 +75,18 @@ export async function preparePage() {
       new Promise((resolve) => setTimeout(resolve, 700)),
     ]);
   }
+  window.scrollTo(0, 0);
   root.scrollTop = 0;
+  document.documentElement.scrollTop = 0;
   await new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve)),
   );
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  if ((window.scrollY || 0) > 1 || (root.scrollTop || 0) > 1) {
+    window.scrollTo(0, 0);
+    root.scrollTop = 0;
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
 
   const fullHeight = root.scrollHeight;
   return {
@@ -129,6 +142,12 @@ export function restorePage() {
     el.removeAttribute("data-wp-style");
   }
   document.getElementById("wp-hide-style")?.remove();
+  const behavior = document.documentElement.dataset.wpScrollBehavior;
+  if (behavior !== undefined) {
+    if (behavior) document.documentElement.style.scrollBehavior = behavior;
+    else document.documentElement.style.removeProperty("scroll-behavior");
+    delete document.documentElement.dataset.wpScrollBehavior;
+  }
   const y = Number(document.documentElement.dataset.wpScroll || 0);
   delete document.documentElement.dataset.wpScroll;
   const root = document.scrollingElement || document.documentElement;
