@@ -100,36 +100,50 @@ export async function preparePage() {
 }
 
 export function hideOverlays() {
-  function shouldHide(el, vw, vh) {
-    if (el === document.body || el === document.documentElement) return false;
-    const cs = getComputedStyle(el);
-    if (cs.position !== "fixed" && cs.position !== "sticky") return false;
-    if (cs.display === "none" || cs.visibility === "hidden") return false;
-    if (Number(cs.opacity) === 0) return false;
-    const rect = el.getBoundingClientRect();
+  function isSide(rect, vw) {
     if (rect.width < 8 || rect.height < 8) return false;
-    if (rect.height > vh * 0.65 && rect.width > vw * 0.65) return false;
-    const bar = rect.height <= 180 && rect.width >= vw * 0.45;
-    const widget =
-      rect.width <= 420 &&
-      rect.height <= 640 &&
-      rect.right >= vw - 28 &&
-      rect.bottom >= vh - 28;
-    const side =
-      rect.width <= Math.min(360, vw * 0.34) &&
-      rect.height >= 48 &&
-      rect.height <= vh &&
-      (rect.left <= 16 || rect.right >= vw - 16);
-    return bar || widget || side;
+    if (rect.width > Math.min(420, vw * 0.4)) return false;
+    return rect.left <= 32 || rect.right >= vw - 32;
+  }
+
+  function mark(el, gone) {
+    if (!el || el === document.body || el === document.documentElement) return;
+    if (el.hasAttribute("data-wp-style")) return;
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden") return;
+    el.setAttribute("data-wp-style", el.getAttribute("style") || "");
+    if (gone) el.style.setProperty("display", "none", "important");
+    else el.style.setProperty("visibility", "hidden", "important");
   }
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   if (!document.body) return false;
   for (const el of document.body.querySelectorAll("*")) {
-    if (!shouldHide(el, vw, vh) || el.hasAttribute("data-wp-style")) continue;
-    el.setAttribute("data-wp-style", el.getAttribute("style") || "");
-    el.style.setProperty("visibility", "hidden", "important");
+    let sticky = null;
+    let node = el;
+    while (node && node !== document.body && node !== document.documentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.position === "fixed" || cs.position === "sticky") {
+        sticky = node;
+        break;
+      }
+      node = node.parentElement;
+    }
+    if (!sticky || sticky.hasAttribute("data-wp-style")) continue;
+    const rect = sticky.getBoundingClientRect();
+    if (rect.width < 8 || rect.height < 8) continue;
+    if (rect.height > vh * 0.65 && rect.width > vw * 0.65) continue;
+    const own = el === sticky ? rect : el.getBoundingClientRect();
+    const bar = rect.height <= 180 && rect.width >= vw * 0.45;
+    const widget =
+      rect.width <= 420 &&
+      rect.height <= 640 &&
+      rect.right >= vw - 28 &&
+      rect.bottom >= vh - 28;
+    if (isSide(rect, vw)) mark(sticky, true);
+    else if (sticky !== el && isSide(own, vw)) mark(el, true);
+    else if (bar || widget) mark(sticky, false);
   }
   return true;
 }

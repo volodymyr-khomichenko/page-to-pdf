@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Page to PDF — Full Page Screenshot",
   "description": "Знімає всю сторінку вниз і зберігає PDF або PNG, щоб закинути файл в AI.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "homepage_url": "https://page-to-pdf-screenshot.vercel.app/",
   "action": {
     "default_title": "Зняти всю сторінку в PDF",

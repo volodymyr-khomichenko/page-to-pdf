@@ -1,8 +1,8 @@
 import { hideOverlays, preparePage, restorePage } from "./page-fns.js";
 import { putShot } from "./idb.js";
 
-const TILE_CSS = 2000;
 const busy = new Set();
+const TILE_CSS = 2000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -238,10 +238,11 @@ async function captureSurface(tabId, info) {
 
   const tiles = [];
   for (let y = 0; y < cssHeight; y += TILE_CSS) {
-    if (y > 0) await evaluate(tabId, hideOverlays);
     const pos = await settleScroll(tabId, y);
     const clipY = y <= pos.maxScroll + 1 ? pos.y : y;
+    if (clipY > 1) await evaluate(tabId, hideOverlays);
     const height = Math.min(TILE_CSS, cssHeight - clipY);
+    if (height <= 1) break;
     const tile = await grab(tabId, {
       clip: { x: 0, y: clipY, width: cssWidth, height, scale },
     });
@@ -264,8 +265,8 @@ async function scrollStitch(tab, cssHeight) {
     await attach(tab.id);
     let pos;
     try {
-      if (covered > 0) await evaluate(tab.id, hideOverlays);
       const settled = await settleScroll(tab.id, covered);
+      if (covered > 0) await evaluate(tab.id, hideOverlays);
       pos = {
         y: settled.y,
         viewport: settled.viewport,
