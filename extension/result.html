@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="uk">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Знімок сторінки</title>
+    <title>__MSG_resultTitle__</title>
     <link rel="stylesheet" href="result.css" />
   </head>
   <body>
@@ -14,18 +14,18 @@
           <span>Page to PDF</span>
         </div>
         <p id="meta" class="meta"></p>
-        <a class="privacy" href="https://khomichenko.com/privacy-policy/#page-to-pdf" target="_blank" rel="noreferrer">Privacy policy</a>
+        <a class="privacy" href="https://khomichenko.com/privacy-policy/#page-to-pdf" target="_blank" rel="noreferrer">__MSG_privacy__</a>
       </div>
       <div class="actions">
-        <button id="png" type="button" disabled>PNG</button>
-        <button id="pdf" type="button" disabled>PDF — одна сторінка</button>
-        <button id="a4" type="button" disabled>PDF — аркуші A4</button>
+        <button id="png" type="button" disabled>__MSG_pngButton__</button>
+        <button id="pdf" type="button" disabled>__MSG_pdfOnePage__</button>
+        <button id="a4" type="button" disabled>__MSG_pdfA4__</button>
       </div>
     </header>
     <main>
-      <p id="status" class="status">Відкриваю знімок…</p>
+      <p id="status" class="status">__MSG_opening__</p>
       <p id="capture-path" hidden data-capture-path=""></p>
-      <img id="shot" alt="Знімок усієї сторінки" hidden />
+      <img id="shot" alt="__MSG_shotAlt__" hidden />
     </main>
     <script type="module" src="result.js"></script>
   </body>

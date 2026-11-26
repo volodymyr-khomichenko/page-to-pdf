@@ -46,7 +46,7 @@ function Home() {
               <Download className="size-5" aria-hidden="true" />
               Скачати розширення
             </a>
-            <p className="text-sm text-muted">Версія 1.0.7. Без акаунта і без реклами.</p>
+            <p className="text-sm text-muted">Версія 1.0.8. У Chrome Web Store ще немає.</p>
           </div>
         </div>
         <div className="lg:col-span-2">

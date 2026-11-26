@@ -3,6 +3,10 @@ import { putShot } from "./idb.js";
 
 const busy = new Set();
 
+function t(key, substitutions) {
+  return chrome.i18n.getMessage(key, substitutions) || key;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -30,21 +34,21 @@ function blockedUrl(url = "") {
 function humanError(error) {
   const message = String(error?.message || error || "");
   if (/detach|cancel/i.test(message)) {
-    return "Зйомку перервано. Натисніть іконку ще раз і не закривайте плашку Chrome, поки сторінка знімається.";
+    return t("captureInterrupted");
   }
   if (/permission|activeTab|captureVisibleTab/i.test(message)) {
-    return "Chrome не дав зняти видиму частину. Оновіть сторінку і натисніть іконку ще раз.";
+    return t("visibleDenied");
   }
-  return message || "Не вдалося зняти сторінку";
+  return message || t("captureFailed");
 }
 
 function safeName(title) {
-  const cleaned = (title || "сторінка")
+  const cleaned = (title || t("pageFallback"))
     .replace(/[\\/:*?"<>|]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 80);
-  return cleaned || "сторінка";
+  return cleaned || t("pageFallback");
 }
 
 async function send(tabId, method, params) {
@@ -60,7 +64,7 @@ async function evaluate(tabId, fn) {
   });
   if (result.exceptionDetails) {
     const detail = result.exceptionDetails.exception?.description || result.exceptionDetails.text;
-    throw new Error(detail || "Сторінка не дала себе зняти");
+    throw new Error(detail || t("pageRefused"));
   }
   return result.result?.value;
 }
@@ -119,7 +123,7 @@ async function shotToPng(bytesList) {
       bitmap.close();
     }
     const blob = await canvas.convertToBlob({ type: "image/png" });
-    if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
+    if (!blob) throw new Error(t("imageTooBig"));
     return { blob, width, height, scaled: false };
   }
 
@@ -208,7 +212,7 @@ async function encodePng(bitmaps, outW, outH, scale) {
   }
   parts.push(pngChunk("IEND", new Uint8Array()));
   const blob = new Blob(parts, { type: "image/png" });
-  if (!blob.size) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
+  if (!blob.size) throw new Error(t("imageTooBig"));
   return blob;
 }
 
@@ -247,7 +251,7 @@ async function settleScroll(tabId, target) {
       awaitPromise: true,
       returnByValue: true,
     });
-    if (result.exceptionDetails) throw new Error("Не вдалося прокрутити сторінку");
+    if (result.exceptionDetails) throw new Error(t("scrollFailed"));
     last = result.result?.value;
     if (
       last &&
@@ -257,12 +261,12 @@ async function settleScroll(tabId, target) {
       return last;
     }
   }
-  if (!last) throw new Error("Не вдалося прокрутити сторінку");
+  if (!last) throw new Error(t("scrollFailed"));
   return last;
 }
 
 async function showProgress(tabId, n, total) {
-  const label = `Capturing… slice ${n} of ${total}`;
+  const label = t("capturing", [String(n), String(total)]);
   await chrome.action.setTitle({ tabId, title: label });
   await chrome.action.setBadgeText({ tabId, text: `${n}/${total}`.slice(0, 4) });
   await send(tabId, "Runtime.evaluate", {
@@ -298,7 +302,7 @@ async function grabViewport(tabId) {
     fromSurface: true,
     captureBeyondViewport: false,
   });
-  if (!result?.data) throw new Error("Chrome не повернув зображення");
+  if (!result?.data) throw new Error(t("noImage"));
   return base64ToBytes(result.data);
 }
 
@@ -314,7 +318,7 @@ async function cropSlice(bytes, cssTop, cssHeight, cssViewport) {
   canvas.getContext("2d").drawImage(bitmap, 0, top, bitmap.width, height, 0, 0, bitmap.width, height);
   bitmap.close();
   const blob = await canvas.convertToBlob({ type: "image/png" });
-  if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
+  if (!blob) throw new Error(t("imageTooBig"));
   return new Uint8Array(await blob.arrayBuffer());
 }
 
@@ -461,11 +465,11 @@ async function scrollStitch(tab, cssHeight, info) {
     canvas.getContext("2d").drawImage(bitmap, 0, cropTop, bitmap.width, cropH, 0, 0, bitmap.width, cropH);
     bitmap.close();
     const blob = await canvas.convertToBlob({ type: "image/png" });
-    if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
+    if (!blob) throw new Error(t("imageTooBig"));
     slices.push(new Uint8Array(await blob.arrayBuffer()));
     covered = needStart + keep;
   }
-  if (!slices.length) throw new Error("Не вдалося зібрати сторінку прокруткою");
+  if (!slices.length) throw new Error(t("stitchFailed"));
   const image = await shotToPng(slices);
   return { image, hidden, slices: slices.length, path: "scroll-stitch" };
 }
@@ -477,11 +481,11 @@ async function openResult(id) {
 }
 
 async function capture(tab) {
-  if (!tab?.id) throw new Error("Немає вкладки");
+  if (!tab?.id) throw new Error(t("noTab"));
   if (blockedUrl(tab.url || "")) {
-    throw new Error("Цю сторінку Chrome не дає знімати. Відкрийте звичайний сайт.");
+    throw new Error(t("blockedPage"));
   }
-  if (busy.has(tab.id)) throw new Error("Ця вкладка вже знімається");
+  if (busy.has(tab.id)) throw new Error(t("alreadyBusy"));
   busy.add(tab.id);
   startKeepAlive();
   await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: "#1F4D3A" });
@@ -544,7 +548,7 @@ async function capture(tab) {
     busy.delete(tab.id);
     stopKeepAlive();
     chrome.action.setBadgeText({ tabId: tab.id, text: "" }).catch(() => {});
-    chrome.action.setTitle({ tabId: tab.id, title: "Зняти всю сторінку в PDF" }).catch(() => {});
+    chrome.action.setTitle({ tabId: tab.id, title: t("actionTitle") }).catch(() => {});
   }
 }
 

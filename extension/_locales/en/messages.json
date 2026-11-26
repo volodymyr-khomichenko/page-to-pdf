@@ -1,0 +1,150 @@
+{
+  "appName": {
+    "message": "Page to PDF — Full Page Screenshot",
+    "description": "Extension name. Same in every language."
+  },
+  "appDesc": {
+    "message": "Captures a full scrolling page and saves PNG or PDF so you can give the file to an AI.",
+    "description": "Store description, 132 characters or fewer."
+  },
+  "actionTitle": {
+    "message": "Capture the full page as PDF",
+    "description": "Toolbar tooltip."
+  },
+  "commandDesc": {
+    "message": "Capture the full page",
+    "description": "Keyboard shortcut description."
+  },
+  "resultTitle": {
+    "message": "Page screenshot",
+    "description": "Result tab title."
+  },
+  "privacy": {
+    "message": "Privacy policy",
+    "description": "Link label."
+  },
+  "pngButton": {
+    "message": "PNG",
+    "description": "Download PNG."
+  },
+  "pdfOnePage": {
+    "message": "PDF — one page",
+    "description": "Download a single-page PDF."
+  },
+  "pdfA4": {
+    "message": "PDF — A4 pages",
+    "description": "Download an A4 PDF."
+  },
+  "opening": {
+    "message": "Opening the screenshot…",
+    "description": "Status while the image loads."
+  },
+  "shotAlt": {
+    "message": "Full page screenshot",
+    "description": "Image description."
+  },
+  "failedTitle": {
+    "message": "Didn't work",
+    "description": "Error heading."
+  },
+  "preparing": {
+    "message": "Preparing…",
+    "description": "Button label while a file is built."
+  },
+  "saveFailed": {
+    "message": "Couldn't save the file",
+    "description": "Save error."
+  },
+  "pdfTooBig": {
+    "message": "The page is too tall for a PDF. Download the PNG instead.",
+    "description": "PDF build failed because the image is too large."
+  },
+  "shotMissing": {
+    "message": "Screenshot not found. Click the extension icon again.",
+    "description": "Result page opened without an id."
+  },
+  "shotGone": {
+    "message": "This screenshot is already gone. Capture the page again.",
+    "description": "Stored screenshot was deleted."
+  },
+  "openFailed": {
+    "message": "Couldn't open the screenshot",
+    "description": "Result page failed to read the image."
+  },
+  "scaledNote": {
+    "message": "The screenshot was scaled down: the browser cannot store an image taller than 32,768 pixels",
+    "description": "Shown when a tall capture is scaled."
+  },
+  "truncatedNote": {
+    "message": "Only the start of the page was captured — it is longer than 30,000 pixels",
+    "description": "Shown when a page is cut at the height cap."
+  },
+  "staysInBrowser": {
+    "message": "The file stays in your browser until you download it.",
+    "description": "Privacy note on the result page."
+  },
+  "capturing": {
+    "message": "Capturing… slice $SLICE$ of $TOTAL$",
+    "description": "Progress while slices are taken.",
+    "placeholders": {
+      "slice": { "content": "$1", "example": "2" },
+      "total": { "content": "$2", "example": "9" }
+    }
+  },
+  "captureFailed": {
+    "message": "Couldn't capture the page",
+    "description": "Generic capture error."
+  },
+  "pageRefused": {
+    "message": "The page could not be captured",
+    "description": "The page script failed."
+  },
+  "imageTooBig": {
+    "message": "The page is too large and the browser could not build the image. Try again.",
+    "description": "Image assembly failed."
+  },
+  "scrollFailed": {
+    "message": "Couldn't scroll the page",
+    "description": "Scroll failed."
+  },
+  "noImage": {
+    "message": "Chrome did not return an image",
+    "description": "Empty screenshot."
+  },
+  "stitchFailed": {
+    "message": "Couldn't assemble the page by scrolling",
+    "description": "Scroll-stitch produced no slices."
+  },
+  "noTab": {
+    "message": "No tab to capture",
+    "description": "Missing tab."
+  },
+  "blockedPage": {
+    "message": "Chrome won't capture this page. Open a normal site — not chrome://, the Web Store, or the built-in PDF viewer.",
+    "description": "Unsupported page."
+  },
+  "alreadyBusy": {
+    "message": "This tab is already being captured",
+    "description": "Second capture on the same tab."
+  },
+  "captureInterrupted": {
+    "message": "The capture was interrupted. Click the icon again and leave the Chrome bar open until the page is finished.",
+    "description": "Debugger was detached."
+  },
+  "visibleDenied": {
+    "message": "Chrome did not allow a capture of the visible area. Reload the page and click the icon again.",
+    "description": "Visible-tab capture was denied."
+  },
+  "pageFallback": {
+    "message": "page",
+    "description": "File name when the tab has no title."
+  },
+  "noPdfPages": {
+    "message": "There are no pages for the PDF",
+    "description": "PDF writer received nothing."
+  },
+  "emptyPdfImage": {
+    "message": "The image for the PDF is empty",
+    "description": "PDF writer received an empty image."
+  }
+}

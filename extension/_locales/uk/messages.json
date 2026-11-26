@@ -1,0 +1,150 @@
+{
+  "appName": {
+    "message": "Page to PDF — Full Page Screenshot",
+    "description": "Назва розширення. Однакова в усіх мовах."
+  },
+  "appDesc": {
+    "message": "Знімає всю сторінку вниз і зберігає PDF або PNG, щоб закинути файл в AI.",
+    "description": "Опис для магазину, до 132 символів."
+  },
+  "actionTitle": {
+    "message": "Зняти всю сторінку в PDF",
+    "description": "Підказка на панелі."
+  },
+  "commandDesc": {
+    "message": "Зняти всю сторінку",
+    "description": "Опис клавіатурного скорочення."
+  },
+  "resultTitle": {
+    "message": "Знімок сторінки",
+    "description": "Заголовок вкладки знімка."
+  },
+  "privacy": {
+    "message": "Privacy policy",
+    "description": "Підпис посилання."
+  },
+  "pngButton": {
+    "message": "PNG",
+    "description": "Завантажити PNG."
+  },
+  "pdfOnePage": {
+    "message": "PDF — одна сторінка",
+    "description": "PDF однією сторінкою."
+  },
+  "pdfA4": {
+    "message": "PDF — аркуші A4",
+    "description": "PDF аркушами A4."
+  },
+  "opening": {
+    "message": "Відкриваю знімок…",
+    "description": "Статус, поки знімок відкривається."
+  },
+  "shotAlt": {
+    "message": "Знімок усієї сторінки",
+    "description": "Опис зображення."
+  },
+  "failedTitle": {
+    "message": "Не вийшло",
+    "description": "Заголовок помилки."
+  },
+  "preparing": {
+    "message": "Готую…",
+    "description": "Кнопка, поки файл готується."
+  },
+  "saveFailed": {
+    "message": "Не вдалося зберегти файл",
+    "description": "Помилка збереження."
+  },
+  "pdfTooBig": {
+    "message": "Сторінка завелика, браузер не зібрав PDF. Скачайте PNG.",
+    "description": "PDF не зібрався через висоту."
+  },
+  "shotMissing": {
+    "message": "Знімок не знайдено. Натисніть іконку розширення ще раз.",
+    "description": "Сторінку знімка відкрито без id."
+  },
+  "shotGone": {
+    "message": "Цього знімка вже немає. Зніміть сторінку ще раз.",
+    "description": "Збережений знімок уже видалено."
+  },
+  "openFailed": {
+    "message": "Не вдалося відкрити знімок",
+    "description": "Не вдалося прочитати зображення."
+  },
+  "scaledNote": {
+    "message": "Знімок зменшено: браузер не зберігає зображення вище 32 768 пікселів",
+    "description": "Примітка, коли високий знімок зменшено."
+  },
+  "truncatedNote": {
+    "message": "Знято лише початок сторінки — вона довша за 30 000 пікселів",
+    "description": "Примітка про обмеження висоти."
+  },
+  "staysInBrowser": {
+    "message": "Файл лишається у браузері, поки ви його не скачаєте.",
+    "description": "Примітка на сторінці знімка."
+  },
+  "capturing": {
+    "message": "Знімаю… фрагмент $SLICE$ з $TOTAL$",
+    "description": "Прогрес зйомки.",
+    "placeholders": {
+      "slice": { "content": "$1", "example": "2" },
+      "total": { "content": "$2", "example": "9" }
+    }
+  },
+  "captureFailed": {
+    "message": "Не вдалося зняти сторінку",
+    "description": "Загальна помилка зйомки."
+  },
+  "pageRefused": {
+    "message": "Сторінка не дала себе зняти",
+    "description": "Скрипт сторінки не виконався."
+  },
+  "imageTooBig": {
+    "message": "Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.",
+    "description": "Не вдалося зібрати зображення."
+  },
+  "scrollFailed": {
+    "message": "Не вдалося прокрутити сторінку",
+    "description": "Помилка прокрутки."
+  },
+  "noImage": {
+    "message": "Chrome не повернув зображення",
+    "description": "Порожній знімок."
+  },
+  "stitchFailed": {
+    "message": "Не вдалося зібрати сторінку прокруткою",
+    "description": "Прокрутка не дала фрагментів."
+  },
+  "noTab": {
+    "message": "Немає вкладки",
+    "description": "Немає вкладки для зйомки."
+  },
+  "blockedPage": {
+    "message": "Цю сторінку Chrome не дає знімати. Відкрийте звичайний сайт — не chrome://, не Web Store і не вбудований переглядач PDF.",
+    "description": "Непідтримувана сторінка."
+  },
+  "alreadyBusy": {
+    "message": "Ця вкладка вже знімається",
+    "description": "Повторна зйомка тієї самої вкладки."
+  },
+  "captureInterrupted": {
+    "message": "Зйомку перервано. Натисніть іконку ще раз і не закривайте плашку Chrome, поки сторінка знімається.",
+    "description": "Налагоджувач від'єднався."
+  },
+  "visibleDenied": {
+    "message": "Chrome не дав зняти видиму частину. Оновіть сторінку і натисніть іконку ще раз.",
+    "description": "Відмовлено у знімку видимої частини."
+  },
+  "pageFallback": {
+    "message": "сторінка",
+    "description": "Ім'я файлу, якщо у вкладки немає заголовка."
+  },
+  "noPdfPages": {
+    "message": "Немає сторінок для PDF",
+    "description": "У PDF нічого передано."
+  },
+  "emptyPdfImage": {
+    "message": "Порожнє зображення для PDF",
+    "description": "Порожнє зображення для PDF."
+  }
+}

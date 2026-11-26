@@ -12,6 +12,19 @@ const id = new URLSearchParams(location.search).get("id");
 let shot = null;
 let bitmap = null;
 
+function t(key) {
+  return chrome.i18n.getMessage(key) || key;
+}
+
+document.documentElement.lang = chrome.i18n.getUILanguage() || "en";
+document.title = t("resultTitle");
+document.querySelector("#png").textContent = t("pngButton");
+document.querySelector("#pdf").textContent = t("pdfOnePage");
+document.querySelector("#a4").textContent = t("pdfA4");
+document.querySelector(".privacy").textContent = t("privacy");
+image.alt = t("shotAlt");
+status.textContent = t("opening");
+
 function downloadBlob(blob, name) {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -27,7 +40,7 @@ function fail(message) {
   image.hidden = true;
   const box = document.createElement("div");
   box.className = "error";
-  box.innerHTML = `<h1>Не вийшло</h1><p></p>`;
+  box.innerHTML = `<h1>${t("failedTitle")}</h1><p></p>`;
   box.querySelector("p").textContent = message;
   document.querySelector("main").append(box);
   for (const button of [pngButton, pdfButton, a4Button]) button.disabled = true;
@@ -42,7 +55,7 @@ async function jpegBytes(source, sx, sy, sw, sh) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
-  if (!blob) throw new Error("Сторінка завелика, браузер не зібрав PDF. Скачайте PNG.");
+  if (!blob) throw new Error(t("pdfTooBig"));
   return {
     jpeg: new Uint8Array(await blob.arrayBuffer()),
     imgW: canvas.width,
@@ -81,12 +94,12 @@ async function a4Pdf() {
 async function withBusy(button, work) {
   const label = button.textContent;
   for (const node of [pngButton, pdfButton, a4Button]) node.disabled = true;
-  button.textContent = "Готую…";
+  button.textContent = t("preparing");
   try {
     await work();
   } catch (error) {
     status.hidden = false;
-    status.textContent = error?.message || "Не вдалося зберегти файл";
+    status.textContent = error?.message || t("saveFailed");
   } finally {
     button.textContent = label;
     for (const node of [pngButton, pdfButton, a4Button]) node.disabled = false;
@@ -112,12 +125,12 @@ a4Button.addEventListener("click", () => {
 });
 
 if (!id) {
-  fail("Знімок не знайдено. Натисніть іконку розширення ще раз.");
+  fail(t("shotMissing"));
 } else {
   getShot(id)
     .then(async (stored) => {
       if (!stored) {
-        fail("Цього знімка вже немає. Зніміть сторінку ще раз.");
+        fail(t("shotGone"));
         return;
       }
       if (stored.error) {
@@ -127,8 +140,8 @@ if (!id) {
       shot = stored;
       bitmap = await createImageBitmap(stored.blob);
       const notes = [`${bitmap.width} × ${bitmap.height}`];
-      if (stored.scaled) notes.push("Знімок зменшено: браузер не зберігає зображення вище 32 768 пікселів");
-      if (stored.truncated) notes.push("Знято лише початок сторінки — вона довша за 30 000 пікселів");
+      if (stored.scaled) notes.push(t("scaledNote"));
+      if (stored.truncated) notes.push(t("truncatedNote"));
       meta.textContent = `${stored.title} · ${notes.join(" · ")}`;
       const path = document.querySelector("#capture-path");
       if (path && stored.capture) {
@@ -137,10 +150,10 @@ if (!id) {
       }
       image.src = URL.createObjectURL(stored.blob);
       image.hidden = false;
-      status.textContent = "Файл лишається у браузері, поки ви його не скачаєте.";
+      status.textContent = t("staysInBrowser");
       for (const button of [pngButton, pdfButton, a4Button]) button.disabled = false;
     })
     .catch((error) => {
-      fail(error?.message || "Не вдалося відкрити знімок");
+      fail(error?.message || t("openFailed"));
     });
 }

@@ -20,7 +20,7 @@ function concat(chunks) {
  * @returns {Uint8Array}
  */
 export function buildPdf(pages) {
-  if (!pages.length) throw new Error("Немає сторінок для PDF");
+  if (!pages.length) throw new Error(chrome.i18n.getMessage("noPdfPages"));
   const chunks = [];
   let offset = 0;
   const push = (data) => {
@@ -47,7 +47,7 @@ export function buildPdf(pages) {
 
   for (const item of items) {
     if (!item.jpeg?.length || item.imgW < 1 || item.imgH < 1) {
-      throw new Error("Порожнє зображення для PDF");
+      throw new Error(chrome.i18n.getMessage("emptyPdfImage"));
     }
     objects.set(item.pageId, {
       text:
