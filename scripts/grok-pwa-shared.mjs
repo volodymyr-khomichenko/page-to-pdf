@@ -435,8 +435,13 @@ export function normalizeHeadContext(ctx = {}) {
   };
 }
 
+export function grokChromeEnabled() {
+  return process.env.VERCEL_ENV !== "production";
+}
+
 export function injectGrokPwaHead(html, ctx = {}) {
   if (typeof html !== "string") return html;
+  if (!grokChromeEnabled()) return html;
   const { site, projectId, creator, creatorId, host, cwd } = normalizeHeadContext(ctx);
   const documentTitle = titleFromDocument(html);
   const appName = resolveOgTitle(

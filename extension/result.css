@@ -37,6 +37,12 @@ body {
   gap: 8px 16px;
 }
 
+.privacy {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .brand {
   display: flex;
   align-items: center;

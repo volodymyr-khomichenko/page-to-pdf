@@ -1,5 +1,3 @@
-const CAP_PX = 30000;
-
 export async function preparePage() {
   const CAP = 30000;
 
@@ -18,38 +16,12 @@ export async function preparePage() {
     }
   }
 
-  function shouldHide(el, vw, vh) {
-    if (el === document.body || el === document.documentElement) return false;
-    const cs = getComputedStyle(el);
-    if (cs.position !== "fixed" && cs.position !== "sticky") return false;
-    if (cs.display === "none" || cs.visibility === "hidden") return false;
-    if (Number(cs.opacity) === 0) return false;
-    const rect = el.getBoundingClientRect();
-    if (rect.width < 8 || rect.height < 8) return false;
-    if (rect.height > vh * 0.65 && rect.width > vw * 0.65) return false;
-    const bar = rect.height <= 180 && rect.width >= vw * 0.45;
-    const widget =
-      rect.width <= 420 &&
-      rect.height <= 640 &&
-      rect.right >= vw - 28 &&
-      rect.bottom >= vh - 28;
-    return bar || widget;
-  }
-
   promoteImages();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const root = document.scrollingElement || document.documentElement;
   if (!document.documentElement.dataset.wpScroll) {
     document.documentElement.dataset.wpScroll = String(root.scrollTop || 0);
-  }
-
-  if (document.body) {
-    for (const el of document.body.querySelectorAll("*")) {
-      if (!shouldHide(el, vw, vh) || el.hasAttribute("data-wp-style")) continue;
-      el.setAttribute("data-wp-style", el.getAttribute("style") || "");
-      el.style.setProperty("visibility", "hidden", "important");
-    }
   }
 
   if (!document.getElementById("wp-hide-style")) {
@@ -60,13 +32,22 @@ export async function preparePage() {
     document.documentElement.appendChild(style);
   }
 
-  const startHeight = root.scrollHeight;
   const step = Math.max(240, Math.floor(vh * 0.9));
-  const limit = Math.min(startHeight, CAP);
-  let walked = 0;
-  for (let y = 0; y < limit && walked < 30; y += step, walked += 1) {
+  const maxSteps = Math.ceil(CAP / step) + 8;
+  let y = 0;
+  for (let i = 0; i < maxSteps && y < CAP; i += 1) {
     root.scrollTop = y;
     await new Promise((resolve) => setTimeout(resolve, 40));
+    promoteImages();
+    const grown = root.scrollHeight;
+    const goal = Math.min(grown, CAP);
+    if (y + step >= goal) {
+      root.scrollTop = Math.min(goal, CAP);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      const again = root.scrollHeight;
+      if (again <= grown + 8 || y + step >= CAP) break;
+    }
+    y += step;
   }
   root.scrollTop = 0;
 
@@ -103,6 +84,41 @@ export async function preparePage() {
     dpr: window.devicePixelRatio || 1,
     truncated: fullHeight > CAP,
   };
+}
+
+export function hideOverlays() {
+  function shouldHide(el, vw, vh) {
+    if (el === document.body || el === document.documentElement) return false;
+    const cs = getComputedStyle(el);
+    if (cs.position !== "fixed" && cs.position !== "sticky") return false;
+    if (cs.display === "none" || cs.visibility === "hidden") return false;
+    if (Number(cs.opacity) === 0) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 8 || rect.height < 8) return false;
+    if (rect.height > vh * 0.65 && rect.width > vw * 0.65) return false;
+    const bar = rect.height <= 180 && rect.width >= vw * 0.45;
+    const widget =
+      rect.width <= 420 &&
+      rect.height <= 640 &&
+      rect.right >= vw - 28 &&
+      rect.bottom >= vh - 28;
+    const side =
+      rect.width <= Math.min(360, vw * 0.34) &&
+      rect.height >= 48 &&
+      rect.height <= vh &&
+      (rect.left <= 16 || rect.right >= vw - 16);
+    return bar || widget || side;
+  }
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (!document.body) return false;
+  for (const el of document.body.querySelectorAll("*")) {
+    if (!shouldHide(el, vw, vh) || el.hasAttribute("data-wp-style")) continue;
+    el.setAttribute("data-wp-style", el.getAttribute("style") || "");
+    el.style.setProperty("visibility", "hidden", "important");
+  }
+  return true;
 }
 
 export function restorePage() {

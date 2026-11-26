@@ -9,14 +9,31 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Page to PDF — Full Page Screenshot" },
-      { name: "description", content: "Розширення для Chrome: знімає сторінку разом зі скролом і зберігає PNG або PDF." },
+      {
+        name: "description",
+        content: "Розширення для Chrome: знімає сторінку разом зі скролом і зберігає PNG або PDF.",
+      },
       { name: "theme-color", content: "#1f4d3a" },
+      { property: "og:title", content: "Page to PDF — Full Page Screenshot" },
+      {
+        property: "og:description",
+        content: "Розширення для Chrome: знімає сторінку разом зі скролом і зберігає PNG або PDF.",
+      },
+      { property: "og:url", content: "https://page-to-pdf-screenshot.vercel.app/" },
+      { property: "og:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },
     ],
     links: [
+      { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "stylesheet", href: appCss },
-      { rel: "manifest", href: "/__grok/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+      ...(import.meta.env.PROD
+        ? []
+        : [
+            { rel: "manifest", href: "/__grok/manifest.webmanifest" },
+            { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+          ]),
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

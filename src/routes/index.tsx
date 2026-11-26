@@ -46,7 +46,7 @@ function Home() {
               <Download className="size-5" aria-hidden="true" />
               Скачати розширення
             </a>
-            <p className="text-sm text-muted">Версія 1.0. Без акаунта і без реклами.</p>
+            <p className="text-sm text-muted">Версія 1.0.1. Без акаунта і без реклами.</p>
           </div>
         </div>
         <div className="lg:col-span-2">
@@ -98,6 +98,16 @@ function Home() {
           </ul>
         </div>
       </section>
+      <footer className="border-t border-line pt-6 text-sm">
+        <a
+          href="https://khomichenko.com/privacy-policy/#page-to-pdf"
+          target="_blank"
+          rel="noreferrer"
+          className="text-muted"
+        >
+          Privacy policy
+        </a>
+      </footer>
     </main>
   );
 }

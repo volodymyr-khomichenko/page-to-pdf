@@ -1,8 +1,7 @@
-import { preparePage, restorePage } from "./page-fns.js";
+import { hideOverlays, preparePage, restorePage } from "./page-fns.js";
 import { putShot } from "./idb.js";
 
 const TILE_CSS = 2000;
-const ONE_SHOT_CSS = 8000;
 const busy = new Set();
 
 function sleep(ms) {
@@ -135,6 +134,7 @@ async function shotToPng(bytesList) {
     bitmaps[i].close();
   }
   const blob = await canvas.convertToBlob({ type: "image/png" });
+  if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
   return { blob, width: outW, height: outH, scaled: scale < 0.999 };
 }
 
@@ -166,6 +166,7 @@ async function cropWidth(bytes, cssWidth, cssHeight) {
   canvas.getContext("2d").drawImage(bitmap, 0, 0);
   bitmap.close();
   const blob = await canvas.convertToBlob({ type: "image/png" });
+  if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
   return new Uint8Array(await blob.arrayBuffer());
 }
 
@@ -173,9 +174,11 @@ async function captureSurface(tabId, info) {
   const cssWidth = Math.max(1, Math.round(info.cssWidth));
   const cssHeight = Math.max(1, Math.round(info.cssHeight));
   const scale = outputScale(cssWidth, cssHeight, info.dpr);
-  const viewportPx = Math.max(1, Math.round((info.viewportHeight || 800) * scale));
+  const viewportCss = Math.max(1, info.viewportHeight || 800);
+  const viewportPx = Math.max(1, Math.round(viewportCss * scale));
+  const oneScreen = cssHeight <= viewportCss * 1.05;
 
-  if (cssHeight <= ONE_SHOT_CSS) {
+  if (oneScreen) {
     const raw = await grab(tabId, {});
     if (!looksLikeViewportOnly(raw, cssHeight * Math.min(info.dpr || 1, 2), viewportPx)) {
       return shotToPng([await cropWidth(raw, cssWidth, cssHeight)]);
@@ -190,6 +193,7 @@ async function captureSurface(tabId, info) {
 
   const tiles = [];
   for (let y = 0; y < cssHeight; y += TILE_CSS) {
+    if (y > 0) await evaluate(tabId, hideOverlays);
     const height = Math.min(TILE_CSS, cssHeight - y);
     const tile = await grab(tabId, {
       clip: { x: 0, y, width: cssWidth, height, scale },
@@ -213,6 +217,7 @@ async function scrollStitch(tab, cssHeight) {
     await attach(tab.id);
     let pos;
     try {
+      if (covered > 0) await evaluate(tab.id, hideOverlays);
       const placed = await send(tab.id, "Runtime.evaluate", {
         expression: `(() => {
           const root = document.scrollingElement || document.documentElement;
@@ -244,6 +249,7 @@ async function scrollStitch(tab, cssHeight) {
     canvas.getContext("2d").drawImage(bitmap, 0, cropTop, bitmap.width, cropH, 0, 0, bitmap.width, cropH);
     bitmap.close();
     const blob = await canvas.convertToBlob({ type: "image/png" });
+    if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
     slices.push(new Uint8Array(await blob.arrayBuffer()));
     covered = needStart + keep;
     await chrome.action.setBadgeText({
@@ -269,6 +275,7 @@ async function capture(tab) {
   }
   if (busy.has(tab.id)) throw new Error("Ця вкладка вже знімається");
   busy.add(tab.id);
+  startKeepAlive();
   await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: "#1F4D3A" });
   await chrome.action.setBadgeText({ tabId: tab.id, text: "…" });
   let prepared = false;
@@ -306,9 +313,43 @@ async function capture(tab) {
       }
     }
     busy.delete(tab.id);
+    stopKeepAlive();
     chrome.action.setBadgeText({ tabId: tab.id, text: "" }).catch(() => {});
   }
 }
+
+async function releaseStuckDebuggers() {
+  try {
+    const targets = await chrome.debugger.getTargets();
+    await Promise.all(
+      targets
+        .filter((target) => target.attached && target.tabId)
+        .map((target) => chrome.debugger.detach({ tabId: target.tabId }).catch(() => {})),
+    );
+  } catch {
+    /* debugger unavailable during startup */
+  }
+}
+
+let keepAliveTimer = null;
+
+function startKeepAlive() {
+  stopKeepAlive();
+  const tick = () => {
+    chrome.runtime.getPlatformInfo().catch(() => {});
+  };
+  tick();
+  keepAliveTimer = setInterval(tick, 20000);
+  chrome.alarms?.create("page-to-pdf-keepalive", { delayInMinutes: 0.4, periodInMinutes: 0.4 }).catch(() => {});
+}
+
+function stopKeepAlive() {
+  if (keepAliveTimer) clearInterval(keepAliveTimer);
+  keepAliveTimer = null;
+  chrome.alarms?.clear("page-to-pdf-keepalive").catch(() => {});
+}
+
+releaseStuckDebuggers();
 
 globalThis.__capture = capture;
 
@@ -317,7 +358,7 @@ chrome.action.onClicked.addListener((tab) => {
     const id = crypto.randomUUID();
     const message = humanError(error);
     try {
-      await putShot(id, { error: message, title: safeName(tab.title), url: tab.url || "" });
+      await putShot(id, { error: message, title: safeName(tab.title), url: tab.url || "", created: Date.now() });
       await openResult(id);
     } catch {
       /* nowhere to report */

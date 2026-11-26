@@ -68,8 +68,9 @@ try {
       width: bitmap.width,
       height: bitmap.height,
       top: sample(20, 8),
+      later: sample(20, Math.min(bitmap.height - 1, 2200)),
       bottom: sample(40, bitmap.height - 8),
-      widget: sample(bitmap.width - 12, 660),
+      widget: sample(bitmap.width - 12, Math.min(bitmap.height - 1, 2200)),
     };
   }, captured.id);
 
@@ -83,9 +84,10 @@ try {
   const report = { extensionId, captured, pixels, pdf: head };
   console.log(JSON.stringify(report, null, 2));
   if (pixels.height < 2000) throw new Error(`too short: ${pixels.height}`);
-  if (pixels.top[1] > 120 && pixels.top[0] < 40) throw new Error(`fixed green bar was captured: ${pixels.top}`);
+  if (pixels.top[1] < 140 || pixels.top[0] > 80) throw new Error(`top bar missing: ${pixels.top}`);
+  if (pixels.later[1] > 140 && pixels.later[0] < 40) throw new Error(`green bar repeated: ${pixels.later}`);
   if (pixels.bottom[0] < 160 || pixels.bottom[1] > 80) throw new Error(`bottom is not red: ${pixels.bottom}`);
-  if (pixels.widget[2] > 180 && pixels.widget[0] < 40) throw new Error(`chat widget was captured: ${pixels.widget}`);
+  if (pixels.widget[2] > 180 && pixels.widget[0] < 40) throw new Error(`chat widget repeated: ${pixels.widget}`);
   if (!head.startsWith("%PDF")) throw new Error(`bad pdf: ${head}`);
   console.log("EXTENSION_OK");
 } finally {
