@@ -7,7 +7,7 @@ const pages = [
   ["mdn", "https://developer.mozilla.org/en-US/docs/Web/CSS/position"],
   ["wiki", "https://en.wikipedia.org/wiki/Screenshot"],
   ["react", "https://react.dev/reference/react/useState"],
-  ["github", "https://docs.github.com/en/get-started/start-your-journey/hello-world"],
+  ["github", "https://docs.github.com/en/get-started/using-github/hello-world"],
 ];
 
 const extArg = process.argv.find((item) => item.startsWith("--ext="));
@@ -99,6 +99,23 @@ if name == "react":
     print(json.dumps({"sandpack": found}))
     if not found:
         fails.append("react: sandpack preview not found or blank")
+if name == "github":
+    blank = 0
+    y = slice_h
+    while y < im.height - 500:
+        ink = 0
+        for x in range(20, 360, 4):
+            p = im.getpixel((x, y))
+            if p[0] < 90 and p[1] < 90 and p[2] < 100:
+                ink += 1
+        if ink > 2:
+            if blank > 300:
+                fails.append(f"github: blank band of {blank}px in the left column before nav text at y={y}")
+                break
+            blank = 0
+        else:
+            blank += 4
+        y += 4
 print("FAILS")
 print("\\n".join(fails))
 `, name, String(metrics.vw), String(metrics.vh), file],
@@ -133,6 +150,7 @@ try {
     });
     await page.bringToFront();
     console.log("capturing", name);
+    const started = Date.now();
     const captured = await worker.evaluate(async () => {
       const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
       const tab = tabs[0];
@@ -162,6 +180,7 @@ try {
     const file = `/tmp/repeat-${name}.png`;
     fs.writeFileSync(file, Buffer.from(b64.b64, "base64"));
     console.log(name, "saved", b64.w, b64.h, "scaled", b64.scaled, file);
+    console.log(name, "capture", JSON.stringify(captured.capture), "wall", Date.now() - started);
     const fail = checkImage(file, name, metrics);
     if (fail) failures.push(fail);
     await page.close();

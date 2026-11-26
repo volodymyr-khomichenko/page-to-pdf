@@ -130,6 +130,11 @@ if (!id) {
       if (stored.scaled) notes.push("Знімок зменшено: браузер не зберігає зображення вище 32 768 пікселів");
       if (stored.truncated) notes.push("Знято лише початок сторінки — вона довша за 30 000 пікселів");
       meta.textContent = `${stored.title} · ${notes.join(" · ")}`;
+      const path = document.querySelector("#capture-path");
+      if (path && stored.capture) {
+        path.dataset.capturePath = stored.capture.path || "";
+        path.textContent = stored.capture.line || "";
+      }
       image.src = URL.createObjectURL(stored.blob);
       image.hidden = false;
       status.textContent = "Файл лишається у браузері, поки ви його не скачаєте.";

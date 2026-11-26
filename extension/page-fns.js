@@ -19,7 +19,41 @@ export async function preparePage() {
   promoteImages();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const root = document.scrollingElement || document.documentElement;
+  const documentRoot = document.scrollingElement || document.documentElement;
+
+  function scrollerLabel(el) {
+    if (!el || el === documentRoot || el === document.documentElement || el === document.body) return "document";
+    const id = el.id ? `#${el.id}` : "";
+    const cls = String(el.className || "").split(/\s+/).filter(Boolean)[0] || "";
+    return `${el.tagName.toLowerCase()}${id}${cls ? `.${cls}` : ""}`;
+  }
+
+  function findScroller() {
+    if (documentRoot.scrollHeight > vh + 240) {
+      return { el: documentRoot, mode: "document", name: "document" };
+    }
+    let best = null;
+    function walk(node) {
+      if (!node?.querySelectorAll) return;
+      for (const el of node.querySelectorAll("*")) {
+        if (el.shadowRoot) walk(el.shadowRoot);
+        const overflow = getComputedStyle(el).overflowY;
+        if (overflow !== "auto" && overflow !== "scroll") continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < vw * 0.55 || rect.height < vh * 0.55) continue;
+        if (el.scrollHeight < el.clientHeight + 400) continue;
+        if (!best || el.scrollHeight > best.scrollHeight) best = el;
+      }
+    }
+    walk(document);
+    if (best) return { el: best, mode: "inner", name: scrollerLabel(best) };
+    return { el: documentRoot, mode: "document", name: "document" };
+  }
+
+  const scroller = findScroller();
+  document.querySelector("[data-wp-scroller]")?.removeAttribute("data-wp-scroller");
+  if (scroller.mode === "inner") scroller.el.setAttribute("data-wp-scroller", scroller.name);
+  const root = scroller.el;
   if (!document.documentElement.dataset.wpScroll) {
     document.documentElement.dataset.wpScroll = String(root.scrollTop || 0);
   }
@@ -75,12 +109,17 @@ export async function preparePage() {
       new Promise((resolve) => setTimeout(resolve, 700)),
     ]);
   }
-  const pause = Math.max(280, Math.floor(vh * 0.85));
-  const warmLimit = Math.min(root.scrollHeight, CAP);
-  for (let y = 0; y < warmLimit; y += pause) {
-    root.scrollTop = y;
-    window.scrollTo(0, y);
-    await new Promise((resolve) => setTimeout(resolve, 160));
+  const warmStart = performance.now();
+  const hasFrame = Boolean(document.querySelector("iframe"));
+  if (hasFrame) {
+    const pause = Math.max(280, Math.floor((scroller.mode === "inner" ? root.clientHeight : vh) * 0.85));
+    const warmLimit = Math.min(root.scrollHeight, CAP);
+    for (let y = 0; y < warmLimit; y += pause) {
+      if (performance.now() - warmStart > 8000) break;
+      root.scrollTop = y;
+      if (scroller.mode === "document") window.scrollTo(0, y);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
   }
   window.scrollTo(0, 0);
   root.scrollTop = 0;
@@ -100,14 +139,15 @@ export async function preparePage() {
     cssWidth: vw,
     cssHeight: Math.min(fullHeight, CAP),
     fullHeight,
-    viewportHeight: vh,
+    viewportHeight: scroller.mode === "inner" ? root.clientHeight : vh,
     dpr: window.devicePixelRatio || 1,
     truncated: fullHeight > CAP,
+    scroller: scroller.name,
+    scrollMode: scroller.mode,
   };
 }
 
 export async function hideOverlays() {
-  const CAP = 25000;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const names = [];
@@ -117,16 +157,6 @@ export async function hideOverlays() {
     const raw = String(el.className || "");
     const cls = raw.split(/\s+/).filter(Boolean).slice(0, 2).join(".");
     return `${el.tagName.toLowerCase()}${id}${cls ? `.${cls}` : ""}`;
-  }
-
-  function walk(root, visit) {
-    if (!root?.querySelectorAll || visit.count >= CAP) return;
-    for (const el of root.querySelectorAll("*")) {
-      visit.count += 1;
-      if (visit.count > CAP) return;
-      visit.fn(el);
-      if (el.shadowRoot) walk(el.shadowRoot, visit);
-    }
   }
 
   function textColumn() {
@@ -184,14 +214,28 @@ export async function hideOverlays() {
     return false;
   }
 
-  function mark(el) {
+  function mark(el, hard) {
     if (!el || el === document.body || el === document.documentElement) return false;
-    if (el.hasAttribute("data-wp-style")) return false;
-    const cs = getComputedStyle(el);
-    if (cs.display === "none" || cs.visibility === "hidden") return false;
-    el.setAttribute("data-wp-style", el.getAttribute("style") || "");
-    el.style.setProperty("visibility", "hidden", "important");
-    names.push(label(el));
+    if (!el.hasAttribute("data-wp-style")) {
+      const cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden") return false;
+      el.setAttribute("data-wp-style", el.getAttribute("style") || "");
+      el.style.setProperty("visibility", "hidden", "important");
+      if (hard) el.style.setProperty("overflow", "hidden", "important");
+      names.push(label(el));
+    }
+    if (!hard) return true;
+    const box = el.getBoundingClientRect();
+    for (const child of el.querySelectorAll("*")) {
+      if (child.hasAttribute("data-wp-style") || inDemo(child)) continue;
+      const rect = child.getBoundingClientRect();
+      const overflow = getComputedStyle(child).overflowY;
+      const spills = overflow === "auto" || overflow === "scroll" || rect.height > box.height + 24 || rect.bottom > vh + 4;
+      if (!spills) continue;
+      child.setAttribute("data-wp-style", child.getAttribute("style") || "");
+      child.style.setProperty("display", "none", "important");
+      names.push(label(child));
+    }
     return true;
   }
 
@@ -212,13 +256,20 @@ export async function hideOverlays() {
     return overlapRatio(rect) < 0.15;
   }
 
+  function up(node) {
+    if (!node) return null;
+    const root = node.getRootNode?.();
+    if (root instanceof ShadowRoot) return root.host;
+    return node.parentElement;
+  }
+
   function topPinned(el) {
     let top = null;
     let node = el;
     while (node && node !== document.body && node !== document.documentElement) {
       const cs = getComputedStyle(node);
       if (cs.position === "sticky" || cs.position === "fixed") top = node;
-      node = node.parentElement;
+      node = up(node);
     }
     return top;
   }
@@ -241,35 +292,32 @@ export async function hideOverlays() {
       own.height <= vh * 1.25;
     const pinRect = pin ? pin.getBoundingClientRect() : null;
     if (pin && isBar(pinRect)) {
-      mark(pin);
+      mark(pin, false);
       return;
     }
     if (selfPinned && isBar(own)) {
-      mark(el);
+      mark(el, false);
       return;
     }
-    if (pin && outside(pinRect)) mark(pin);
-    if ((selfPinned || scroller) && outside(own)) mark(el);
-    if (fromStuck && outside(own) && own.width <= 56 && own.height <= 56) mark(el);
+    if (pin && outside(pinRect)) mark(pin, true);
+    if ((selfPinned || scroller) && outside(own)) mark(el, true);
+    if (fromStuck && outside(own) && own.width <= 56 && own.height <= 56) mark(el, true);
   }
 
   const seen = [];
-  const visit = {
-    count: 0,
-    fn(el) {
-      if (inDemo(el) || seen.length > 400) return;
-      const rect = el.getBoundingClientRect();
-      if (rect.width < 8 || rect.height < 8) return;
-      if (rect.bottom < 0 || rect.top > vh || rect.right < 0 || rect.left > vw) return;
-      const cs = getComputedStyle(el);
-      const sticky = cs.position === "sticky" || cs.position === "fixed";
-      const scroller =
-        (cs.overflowY === "auto" || cs.overflowY === "scroll") && rect.height >= vh * 0.5;
-      const edgeToggle = rect.width <= 48 && rect.height <= 48 && (rect.left <= 28 || rect.right >= vw - 28);
-      if (sticky || scroller || edgeToggle) seen.push(el);
-    },
-  };
-  walk(document, visit);
+  const bag = new Set();
+  const points = [];
+  for (let y = 8; y < vh; y += 40) {
+    for (let x = 4; x <= 520; x += 52) points.push([x, y], [vw - x, y]);
+  }
+  for (let x = 24; x < vw; x += 160) points.push([x, 8], [x, 48]);
+  for (const [x, y] of points) {
+    for (const el of document.elementsFromPoint(x, y)) bag.add(el);
+  }
+  for (const el of bag) {
+    if (!el || el === document.body || el === document.documentElement || inDemo(el)) continue;
+    seen.push(el);
+  }
 
   async function nudge() {
     const root = document.scrollingElement || document.documentElement;
@@ -296,7 +344,9 @@ export async function hideOverlays() {
 
   const stuck = new Set(await nudge());
   for (const el of seen) consider(el, stuck.has(el));
-  for (const el of await nudge()) consider(el, true);
+  if (names.length) {
+    for (const el of await nudge()) consider(el, true);
+  }
 
   return { count: names.length, names: names.slice(0, 16), span: content };
 }
@@ -315,16 +365,16 @@ export function framesNeedWait() {
   for (const frame of frames) {
     const rect = frame.getBoundingClientRect();
     if (rect.width < 180 || rect.bottom < 8 || rect.top > window.innerHeight - 8) continue;
-    if (rect.height < 120) {
-      waiting += 1;
-      continue;
-    }
+    if (rect.height >= 120) continue;
+    const src = frame.getAttribute("src") || "";
+    if (!src && rect.height < 48) continue;
     try {
       const doc = frame.contentDocument;
-      if (doc && doc.readyState !== "complete") waiting += 1;
+      if (doc && doc.readyState === "complete" && rect.height >= 80) continue;
     } catch {
-      /* cross-origin and already tall */
+      /* cross-origin preview still short */
     }
+    waiting += 1;
   }
   return waiting;
 }
@@ -343,6 +393,8 @@ export function restorePage() {
   }
   restoreTree(document);
   document.getElementById("wp-hide-style")?.remove();
+  document.getElementById("wp-progress")?.remove();
+  document.querySelector("[data-wp-scroller]")?.removeAttribute("data-wp-scroller");
   const behavior = document.documentElement.dataset.wpScrollBehavior;
   if (behavior !== undefined) {
     if (behavior) document.documentElement.style.scrollBehavior = behavior;

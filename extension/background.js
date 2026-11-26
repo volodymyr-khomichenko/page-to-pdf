@@ -219,22 +219,27 @@ async function settleScroll(tabId, target) {
     const result = await send(tabId, "Runtime.evaluate", {
       expression: `(() => new Promise((resolve) => {
         const want = ${want};
-        const root = document.scrollingElement || document.documentElement;
-        const maxScroll = Math.max(0, root.scrollHeight - window.innerHeight);
+        const marked = document.querySelector("[data-wp-scroller]");
+        const root = marked || document.scrollingElement || document.documentElement;
+        const viewport = marked ? marked.clientHeight : window.innerHeight;
+        const maxScroll = Math.max(0, root.scrollHeight - viewport);
         const y = Math.min(want, maxScroll);
         document.documentElement.style.scrollBehavior = "auto";
-        window.scrollTo(0, y);
         root.scrollTop = y;
-        document.documentElement.scrollTop = y;
+        if (!marked) {
+          window.scrollTo(0, y);
+          document.documentElement.scrollTop = y;
+        }
         requestAnimationFrame(() => requestAnimationFrame(() => {
           setTimeout(() => {
-            const now = document.scrollingElement || document.documentElement;
+            const now = marked || document.scrollingElement || document.documentElement;
             resolve({
-              scrollY: window.scrollY || 0,
+              scrollY: marked ? now.scrollTop || 0 : window.scrollY || 0,
               scrollTop: now.scrollTop || 0,
               y,
               maxScroll,
-              viewport: window.innerHeight,
+              viewport,
+              inner: Boolean(marked),
             });
           }, 80);
         }));
@@ -246,14 +251,45 @@ async function settleScroll(tabId, target) {
     last = result.result?.value;
     if (
       last &&
-      Math.abs(last.scrollY - last.y) <= 1 &&
-      Math.abs(last.scrollTop - last.y) <= 1
+      Math.abs(last.scrollTop - last.y) <= 1 &&
+      (last.inner || Math.abs(last.scrollY - last.y) <= 1)
     ) {
       return last;
     }
   }
   if (!last) throw new Error("Не вдалося прокрутити сторінку");
   return last;
+}
+
+async function showProgress(tabId, n, total) {
+  const label = `Capturing… slice ${n} of ${total}`;
+  await chrome.action.setTitle({ tabId, title: label });
+  await chrome.action.setBadgeText({ tabId, text: `${n}/${total}`.slice(0, 4) });
+  await send(tabId, "Runtime.evaluate", {
+    expression: `(() => {
+      let el = document.getElementById("wp-progress");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "wp-progress";
+        el.setAttribute("style", "position:fixed;z-index:2147483647;left:50%;bottom:16px;transform:translateX(-50%);background:#1F4D3A;color:#fff;font:600 14px/1.2 sans-serif;padding:8px 14px;border-radius:999px;pointer-events:none");
+        document.documentElement.appendChild(el);
+      }
+      el.textContent = ${JSON.stringify(label)};
+    })()`,
+    returnByValue: true,
+  });
+}
+
+async function clearProgress(tabId) {
+  await send(tabId, "Runtime.evaluate", {
+    expression: `document.getElementById("wp-progress")?.remove()`,
+    returnByValue: true,
+  });
+}
+
+function surfaceTooTall(bytes, viewport) {
+  const size = pngSize(bytes);
+  return Boolean(size && viewport > 0 && size.height > viewport * 1.35);
 }
 
 async function grabViewport(tabId) {
@@ -304,11 +340,19 @@ async function waitForSlice(tabId) {
     /* network domain is optional */
   }
   const deadline = Date.now() + 6000;
+  const started = Date.now();
+  let stableSince = started;
+  let lastWaiting = pending;
   try {
     while (Date.now() < deadline) {
       const still = await evaluate(tabId, framesNeedWait);
       const idle = inflight === 0 && Date.now() - idleAt >= 500;
       if (!still && idle) return;
+      if (still !== lastWaiting) {
+        lastWaiting = still;
+        stableSince = Date.now();
+      }
+      if (idle && Date.now() - stableSince >= 1600 && Date.now() - started >= 1600) return;
       await sleep(150);
     }
   } finally {
@@ -338,50 +382,71 @@ async function hideForSlice(tabId) {
 async function captureSurface(tabId, info) {
   const cssHeight = Math.max(1, Math.round(info.cssHeight));
   const tiles = [];
+  const hidden = [];
   let covered = 0;
   let guard = 0;
+  const total = Math.max(1, Math.ceil(cssHeight / Math.max(1, info.viewportHeight || 800)));
   while (covered < cssHeight - 1 && guard < 80) {
     guard += 1;
+    await showProgress(tabId, tiles.length + 1, total);
     const pos = await settleScroll(tabId, covered);
-    if (covered > 0) await hideForSlice(tabId);
+    if (covered > 0) {
+      const report = await hideForSlice(tabId);
+      hidden.push(report?.count || 0);
+    } else {
+      hidden.push(0);
+    }
     await waitForSlice(tabId);
     const docEnd = Math.min(cssHeight, pos.y + pos.viewport);
     const start = Math.max(covered, pos.y);
     const keep = docEnd - start;
     if (keep <= 1) break;
+    await clearProgress(tabId);
     const tile = await grabViewport(tabId);
+    if (surfaceTooTall(tile, pos.viewport)) {
+      console.info("[page-to-pdf] surface taller than the viewport, using scroll-stitch");
+      return null;
+    }
     tiles.push(await cropSlice(tile, start - pos.y, keep, pos.viewport));
     covered = start + keep;
-    await chrome.action.setBadgeText({
-      tabId,
-      text: `${Math.min(100, Math.round((covered / cssHeight) * 100))}`,
-    });
   }
+  await clearProgress(tabId);
   if (!tiles.length) return null;
-  return shotToPng(tiles);
+  const image = await shotToPng(tiles);
+  return { image, hidden, slices: tiles.length, path: "viewport-stitch" };
 }
 
-async function scrollStitch(tab, cssHeight) {
+async function scrollStitch(tab, cssHeight, info) {
   const slices = [];
+  const hidden = [];
   let covered = 0;
   let guard = 0;
+  const viewportGuess = Math.max(1, info?.viewportHeight || 800);
+  const total = Math.max(1, Math.ceil(cssHeight / viewportGuess));
   while (covered < cssHeight - 1 && guard < 80) {
     guard += 1;
     await attach(tab.id);
     let pos;
     try {
+      await showProgress(tab.id, slices.length + 1, total);
       const settled = await settleScroll(tab.id, covered);
-      if (covered > 0) await hideForSlice(tab.id);
+      if (covered > 0) {
+        const report = await hideForSlice(tab.id);
+        hidden.push(report?.count || 0);
+      } else {
+        hidden.push(0);
+      }
       await waitForSlice(tab.id);
       pos = {
         y: settled.y,
         viewport: settled.viewport,
         height: Math.min(cssHeight, settled.maxScroll + settled.viewport),
       };
+      await clearProgress(tab.id);
     } finally {
       await detach(tab.id);
     }
-    await sleep(60);
+    await sleep(90);
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
     const bytes = base64ToBytes(dataUrl.split(",")[1]);
     const docEnd = Math.min(pos.height, pos.y + pos.viewport);
@@ -399,14 +464,10 @@ async function scrollStitch(tab, cssHeight) {
     if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
     slices.push(new Uint8Array(await blob.arrayBuffer()));
     covered = needStart + keep;
-    await chrome.action.setBadgeText({
-      tabId: tab.id,
-      text: `${Math.min(99, Math.round((covered / cssHeight) * 100))}`,
-    });
-    if (covered < cssHeight - 1) await sleep(520);
   }
   if (!slices.length) throw new Error("Не вдалося зібрати сторінку прокруткою");
-  return shotToPng(slices);
+  const image = await shotToPng(slices);
+  return { image, hidden, slices: slices.length, path: "scroll-stitch" };
 }
 
 async function openResult(id) {
@@ -430,15 +491,34 @@ async function capture(tab) {
     await attach(tab.id);
     prepared = true;
     const info = await evaluate(tab.id, preparePage);
-    console.info("[page-to-pdf] page", info.cssWidth, info.cssHeight, info.fullHeight, info.viewportHeight);
-    let image = null;
+    const started = Date.now();
+    console.info(
+      "[page-to-pdf] page",
+      info.cssWidth,
+      info.cssHeight,
+      info.fullHeight,
+      info.viewportHeight,
+      info.scrollMode,
+      info.scroller,
+    );
+    let shot = null;
     try {
       await send(tab.id, "Page.enable");
-      image = await captureSurface(tab.id, info);
+      shot = await captureSurface(tab.id, info);
     } finally {
       await detach(tab.id);
     }
-    if (!image) image = await scrollStitch(tab, info.cssHeight);
+    if (!shot) shot = await scrollStitch(tab, info.cssHeight, info);
+    const image = shot.image;
+    const captureMeta = {
+      path: shot.path,
+      scroller: info.scroller || "document",
+      slices: shot.slices,
+      hidden: shot.hidden || [],
+      ms: Date.now() - started,
+    };
+    captureMeta.line = `path=${captureMeta.path} scroller=${captureMeta.scroller} slices=${captureMeta.slices} hidden=${captureMeta.hidden.join(",")} ms=${captureMeta.ms}`;
+    console.info("[page-to-pdf]", captureMeta.line);
     const id = crypto.randomUUID();
     await putShot(id, {
       blob: image.blob,
@@ -449,9 +529,10 @@ async function capture(tab) {
       title: safeName(tab.title),
       url: tab.url || "",
       created: Date.now(),
+      capture: captureMeta,
     });
     await openResult(id);
-    return { id, width: image.width, height: image.height };
+    return { id, width: image.width, height: image.height, capture: captureMeta };
   } finally {
     if (prepared) {
       try {
@@ -463,6 +544,7 @@ async function capture(tab) {
     busy.delete(tab.id);
     stopKeepAlive();
     chrome.action.setBadgeText({ tabId: tab.id, text: "" }).catch(() => {});
+    chrome.action.setTitle({ tabId: tab.id, title: "Зняти всю сторінку в PDF" }).catch(() => {});
   }
 }
 
