@@ -4,7 +4,7 @@
     "description": "Extension name. Same in every language."
   },
   "appDesc": {
-    "message": "Captures a full scrolling page and saves PNG or PDF so you can give the file to an AI.",
+    "message": "Capture a logged-in dashboard or private page as PNG or PDF, then give the file to an AI.",
     "description": "Store description, 132 characters or fewer."
   },
   "actionTitle": {

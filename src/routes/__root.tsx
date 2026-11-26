@@ -11,13 +11,13 @@ export const Route = createRootRoute({
       { title: "Page to PDF — Full Page Screenshot" },
       {
         name: "description",
-        content: "Розширення для Chrome: знімає сторінку разом зі скролом і зберігає PNG або PDF.",
+        content: "Розширення для Chrome: знімає залогінену сторінку — кабінет, аналітику, адмінку — і зберігає PNG або PDF для AI.",
       },
       { name: "theme-color", content: "#1f4d3a" },
       { property: "og:title", content: "Page to PDF — Full Page Screenshot" },
       {
         property: "og:description",
-        content: "Розширення для Chrome: знімає сторінку разом зі скролом і зберігає PNG або PDF.",
+        content: "Розширення для Chrome: знімає залогінену сторінку — кабінет, аналітику, адмінку — і зберігає PNG або PDF для AI.",
       },
       { property: "og:url", content: "https://page-to-pdf-screenshot.vercel.app/" },
       { property: "og:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },

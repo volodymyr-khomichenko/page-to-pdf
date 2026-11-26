@@ -34,8 +34,7 @@ function Home() {
             Page to PDF
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-muted">
-            Знімає всю сторінку, не лише екран. PDF або PNG можна одразу
-            завантажити в AI.
+            Знімає сторінку, яку не витягнеш публічно: кабінет, аналітику, адмінку. PDF або PNG можна одразу дати в AI.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <a
@@ -46,7 +45,7 @@ function Home() {
               <Download className="size-5" aria-hidden="true" />
               Скачати розширення
             </a>
-            <p className="text-sm text-muted">Версія 1.0.8. У Chrome Web Store ще немає.</p>
+            <p className="text-sm text-muted">Версія 1.0.9. У Chrome Web Store ще немає.</p>
           </div>
         </div>
         <div className="lg:col-span-2">
@@ -68,13 +67,13 @@ function Home() {
         <div>
           <h2 className="font-serif text-3xl font-semibold">Як знімати</h2>
           <ol className="mt-4 flex flex-col gap-3 text-base leading-relaxed">
-            <li>Відкрийте звичайну статтю, документ або лендінг.</li>
+            <li>Відкрийте сторінку, на яку ви вже увійшли: аналітику, рекламний кабінет, CRM, адмінку чи внутрішній інструмент.</li>
             <li>Натисніть іконку Page to PDF або Alt+Shift+Y.</li>
             <li>
               Зачекайте. Chrome на мить напише, що сторінку налагоджують — так
               знімок виходить цілісним, без швів.
             </li>
-            <li>У новій вкладці скачайте PNG, PDF одним аркушем або PDF на A4.</li>
+            <li>У новій вкладці скачайте PNG або PDF і за потреби завантажте файл у ChatGPT, Claude, Gemini чи інший AI.</li>
           </ol>
         </div>
         <div className="rounded-2xl border border-line bg-card p-5">
@@ -82,8 +81,8 @@ function Home() {
           <ul className="mt-4 flex flex-col gap-4">
             <Limit
               icon={<FileImage className="size-5" aria-hidden="true" />}
-              title="Статті, документація, лендінги"
-              text="Уся висота сторінки, липке меню і чат не повторюються на кожному екрані."
+              title="Кабінети, аналітика, адмінки"
+              text="Уся висота сторінки, яку ви вже бачите у своєму браузері. Нічого не відправляється на сервер. Статті теж можна зняти, але це не головне."
             />
             <Limit
               icon={<FileText className="size-5" aria-hidden="true" />}
@@ -113,29 +112,47 @@ function Home() {
 }
 
 function ResultPreview() {
+  const bars = [42, 68, 50, 84, 58, 96, 72];
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm" aria-hidden="true">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <span className="text-sm font-semibold">Знімок</span>
+        <span className="text-sm font-semibold">Кабінет</span>
         <span className="text-xs text-muted">PNG · PDF</span>
       </div>
-      <div className="flex flex-col gap-3 p-4">
-        <div className="rounded-lg border border-line bg-paper px-4 py-4">
-          <p className="font-serif text-xl leading-snug font-semibold">Як читати довгу сторінку</p>
-          <p className="mt-2 text-sm leading-relaxed text-muted">
-            Перший екран, другий, і все, що було нижче скролу, в одному файлі.
-          </p>
-          <div className="mt-4 h-16 rounded-md bg-stamp" />
-          <p className="mt-3 text-sm leading-relaxed text-muted">
-            Кінець сторінки теж на місці, не обрізаний по висоті вікна.
-          </p>
+      <div className="flex gap-3 p-4">
+        <div className="flex w-12 shrink-0 flex-col gap-2 pt-1">
+          <div className="h-2 rounded-full bg-stamp" />
+          <div className="h-2 w-9 rounded-full bg-line" />
+          <div className="h-2 rounded-full bg-line" />
+          <div className="h-2 w-8 rounded-full bg-line" />
+          <div className="h-2 w-10 rounded-full bg-line" />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full bg-stamp px-3 py-1.5 text-sm font-semibold text-stamp-fg">PNG</span>
-          <span className="rounded-full bg-stamp px-3 py-1.5 text-sm font-semibold text-stamp-fg">PDF</span>
-          <span className="rounded-full bg-stamp px-3 py-1.5 text-sm font-semibold text-stamp-fg">A4</span>
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="grid grid-cols-3 gap-2">
+            <Kpi label="Візити" value="12,4к" />
+            <Kpi label="Заявки" value="318" />
+            <Kpi label="Конверсія" value="4,8%" />
+          </div>
+          <div className="flex h-20 items-end gap-1.5 rounded-lg border border-line bg-paper px-3 py-2">
+            {bars.map((height, index) => (
+              <div
+                key={index}
+                className="flex-1 rounded-sm bg-stamp"
+                style={{ height: `${height}%` }}
+              />
+            ))}
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Kpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-paper px-2 py-2">
+      <p className="text-[11px] text-muted">{label}</p>
+      <p className="text-sm font-semibold text-ink">{value}</p>
     </div>
   );
 }

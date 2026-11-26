@@ -77,7 +77,7 @@ try {
   const result = await context.newPage();
   const downloadPromise = result.waitForEvent("download", { timeout: 20000 });
   await result.goto(`chrome-extension://${extensionId}/result.html?id=${captured.id}`);
-  await result.getByRole("button", { name: "PDF — одна сторінка" }).click();
+  await result.getByRole("button", { name: "PDF — one page" }).click();
   const download = await downloadPromise;
   const file = await download.path();
   const head = fs.readFileSync(file).subarray(0, 8).toString();
