@@ -1,4 +1,4 @@
-import { hideOverlays, preparePage, restorePage } from "./page-fns.js";
+import { hideOverlays, preparePage, restorePage, waitForFrames } from "./page-fns.js";
 import { putShot } from "./idb.js";
 
 const busy = new Set();
@@ -92,18 +92,8 @@ async function restore(tabId) {
 }
 
 async function shotToPng(bytesList) {
-  if (bytesList.length === 1) {
-    const size = pngSize(bytesList[0]);
-    if (size && size.width <= 8192 && size.height <= 16384) {
-      return {
-        blob: new Blob([bytesList[0]], { type: "image/png" }),
-        width: size.width,
-        height: size.height,
-        scaled: false,
-      };
-    }
-  }
-
+  const MAX_H = 32768;
+  const MAX_W = 8192;
   const bitmaps = [];
   for (const bytes of bytesList) {
     bitmaps.push(await createImageBitmap(new Blob([bytes], { type: "image/png" })));
@@ -111,23 +101,115 @@ async function shotToPng(bytesList) {
   const width = bitmaps[0].width;
   const height = bitmaps.reduce((sum, bitmap) => sum + bitmap.height, 0);
   let scale = 1;
-  if (height > 16384) scale = 16384 / height;
-  if (width * scale > 8192) scale = Math.min(scale, 8192 / width);
+  if (height > MAX_H) scale = MAX_H / height;
+  if (width * scale > MAX_W) scale = Math.min(scale, MAX_W / width);
+  const scaled = scale < 0.999;
+  if (!scaled && width <= MAX_W && height <= 16384) {
+    if (bitmaps.length === 1) {
+      const blob = new Blob([bytesList[0]], { type: "image/png" });
+      bitmaps[0].close();
+      return { blob, width, height, scaled: false };
+    }
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    let y = 0;
+    for (const bitmap of bitmaps) {
+      ctx.drawImage(bitmap, 0, y);
+      y += bitmap.height;
+      bitmap.close();
+    }
+    const blob = await canvas.convertToBlob({ type: "image/png" });
+    if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
+    return { blob, width, height, scaled: false };
+  }
+
   const outW = Math.max(1, Math.round(width * scale));
   const outH = Math.max(1, Math.round(height * scale));
-  const canvas = new OffscreenCanvas(outW, outH);
-  const ctx = canvas.getContext("2d");
-  let y = 0;
-  for (let i = 0; i < bitmaps.length; i += 1) {
-    const next = i === bitmaps.length - 1 ? outH : Math.round(y + bitmaps[i].height * scale);
-    const destY = Math.round(y);
-    ctx.drawImage(bitmaps[i], 0, destY, outW, Math.max(1, next - destY));
-    y += bitmaps[i].height * scale;
-    bitmaps[i].close();
+  const blob = await encodePng(bitmaps, outW, outH, scale);
+  return { blob, width: outW, height: outH, scaled };
+}
+
+function crc32(bytes) {
+  let c = ~0;
+  for (let i = 0; i < bytes.length; i += 1) {
+    c ^= bytes[i];
+    for (let k = 0; k < 8; k += 1) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
   }
-  const blob = await canvas.convertToBlob({ type: "image/png" });
-  if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
-  return { blob, width: outW, height: outH, scaled: scale < 0.999 };
+  return ~c >>> 0;
+}
+
+function pngChunk(type, data) {
+  const out = new Uint8Array(12 + data.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, data.length);
+  out[4] = type.charCodeAt(0);
+  out[5] = type.charCodeAt(1);
+  out[6] = type.charCodeAt(2);
+  out[7] = type.charCodeAt(3);
+  out.set(data, 8);
+  const signed = new Uint8Array(4 + data.length);
+  signed.set(out.subarray(4, 8 + data.length));
+  view.setUint32(8 + data.length, crc32(signed));
+  return out;
+}
+
+async function encodePng(bitmaps, outW, outH, scale) {
+  const stream = new CompressionStream("deflate");
+  const writer = stream.writable.getWriter();
+  const reader = stream.readable.getReader();
+  const compressed = [];
+  const pump = (async () => {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      compressed.push(value);
+    }
+  })();
+  let destY = 0;
+  for (let i = 0; i < bitmaps.length; i += 1) {
+    const bitmap = bitmaps[i];
+    const srcH = bitmap.height;
+    const next = i === bitmaps.length - 1 ? outH : Math.round(destY + srcH * scale);
+    const tileH = Math.max(1, next - Math.round(destY));
+    const canvas = new OffscreenCanvas(outW, tileH);
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(bitmap, 0, 0, outW, tileH);
+    bitmap.close();
+    const pixels = ctx.getImageData(0, 0, outW, tileH).data;
+    const stride = outW * 4;
+    for (let y = 0; y < tileH; y += 1) {
+      const row = new Uint8Array(1 + stride);
+      row.set(pixels.subarray(y * stride, (y + 1) * stride), 1);
+      await writer.write(row);
+    }
+    destY += srcH * scale;
+  }
+  await writer.close();
+  await pump;
+  let size = 0;
+  for (const part of compressed) size += part.length;
+  const idat = new Uint8Array(size);
+  let offset = 0;
+  for (const part of compressed) {
+    idat.set(part, offset);
+    offset += part.length;
+  }
+  const ihdr = new Uint8Array(13);
+  const view = new DataView(ihdr.buffer);
+  view.setUint32(0, outW);
+  view.setUint32(4, outH);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const parts = [signature, pngChunk("IHDR", ihdr)];
+  const chunkSize = 1024 * 1024;
+  for (let i = 0; i < idat.length; i += chunkSize) {
+    parts.push(pngChunk("IDAT", idat.subarray(i, i + chunkSize)));
+  }
+  parts.push(pngChunk("IEND", new Uint8Array()));
+  const blob = new Blob(parts, { type: "image/png" });
+  if (!blob.size) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
+  return blob;
 }
 
 async function settleScroll(tabId, target) {
@@ -223,6 +305,7 @@ async function captureSurface(tabId, info) {
     guard += 1;
     const pos = await settleScroll(tabId, covered);
     if (covered > 0) await hideForSlice(tabId);
+    await evaluate(tabId, waitForFrames);
     const docEnd = Math.min(cssHeight, pos.y + pos.viewport);
     const start = Math.max(covered, pos.y);
     const keep = docEnd - start;
@@ -250,6 +333,7 @@ async function scrollStitch(tab, cssHeight) {
     try {
       const settled = await settleScroll(tab.id, covered);
       if (covered > 0) await hideForSlice(tab.id);
+      await evaluate(tab.id, waitForFrames);
       pos = {
         y: settled.y,
         viewport: settled.viewport,
@@ -307,6 +391,7 @@ async function capture(tab) {
     await attach(tab.id);
     prepared = true;
     const info = await evaluate(tab.id, preparePage);
+    console.info("[page-to-pdf] page", info.cssWidth, info.cssHeight, info.fullHeight, info.viewportHeight);
     let image = null;
     try {
       await send(tab.id, "Page.enable");

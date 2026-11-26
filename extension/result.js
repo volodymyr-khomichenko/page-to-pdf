@@ -127,8 +127,8 @@ if (!id) {
       shot = stored;
       bitmap = await createImageBitmap(stored.blob);
       const notes = [`${bitmap.width} × ${bitmap.height}`];
-      if (stored.scaled) notes.push("сторінку трохи зменшено, бо вона дуже довга");
-      if (stored.truncated) notes.push("знято перші 30 000 пікселів");
+      if (stored.scaled) notes.push("Знімок зменшено: браузер не зберігає зображення вище 32 768 пікселів");
+      if (stored.truncated) notes.push("Знято лише початок сторінки — вона довша за 30 000 пікселів");
       meta.textContent = `${stored.title} · ${notes.join(" · ")}`;
       image.src = URL.createObjectURL(stored.blob);
       image.hidden = false;

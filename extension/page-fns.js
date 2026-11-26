@@ -122,36 +122,32 @@ export function hideOverlays() {
     }
   }
 
-  function contentSpan() {
+  function textColumn() {
+    const samples = [];
     const h1 = document.querySelector("h1");
-    let best = null;
+    let h1w = 0;
     if (h1) {
-      let node = h1;
-      while (node && node !== document.body && node !== document.documentElement) {
-        const display = getComputedStyle(node).display;
-        if (display !== "contents") {
-          const rect = node.getBoundingClientRect();
-          if (rect.width >= 180 && rect.width <= vw * 0.86 && rect.height >= 32) {
-            if (!best || rect.width > best.width + 24) {
-              best = { left: rect.left, right: rect.right, width: rect.width };
-            }
-          }
-          if (rect.width > vw * 0.92) break;
-        }
-        node = node.parentElement;
+      const rect = h1.getBoundingClientRect();
+      if (rect.width >= 80 && rect.height >= 8) {
+        samples.push(rect);
+        h1w = rect.width;
       }
     }
-    if (!best) {
-      const main = document.querySelector("article, [role='main'], main");
-      if (main && getComputedStyle(main).display !== "contents") {
-        const rect = main.getBoundingClientRect();
-        if (rect.width >= 180 && rect.width <= vw * 0.9) {
-          best = { left: rect.left, right: rect.right, width: rect.width };
-        }
-      }
+    const scope =
+      document.querySelector("#mw-content-text, article, [role='main'], main") || document.body;
+    for (const p of scope.querySelectorAll("p")) {
+      if (p.closest("nav, aside, header, footer, [role='navigation']")) continue;
+      const rect = p.getBoundingClientRect();
+      if (rect.width < 160 || rect.height < 14 || rect.width > vw * 0.94) continue;
+      if (h1w >= 280 && rect.width > h1w * 1.6) continue;
+      samples.push(rect);
+      if (samples.length >= 6) break;
     }
-    if (!best) return { left: vw * 0.18, right: vw * 0.82, width: vw * 0.64 };
-    return best;
+    if (!samples.length) return { left: vw * 0.18, right: vw * 0.82, width: vw * 0.64 };
+    const left = Math.min(...samples.map((rect) => rect.left));
+    const right = Math.max(...samples.map((rect) => rect.right));
+    if (right - left < 140) return { left: vw * 0.18, right: vw * 0.82, width: vw * 0.64 };
+    return { left, right, width: right - left };
   }
 
   function inDemo(el) {
@@ -164,12 +160,12 @@ export function hideOverlays() {
           tag === "OBJECT" ||
           tag === "EMBED" ||
           tag === "INTERACTIVE-EXAMPLE" ||
-          tag === "MDN-PLAY-RUNNER" ||
-          tag === "MDN-PLAY-EDITOR" ||
-          tag === "MDN-PLAY-CONTROLLER"
+          tag.startsWith("MDN-PLAY")
         ) {
           return true;
         }
+        const cls = String(node.className || "");
+        if (/sandpack|sp-preview|sp-stack|sp-wrapper|sp-layout/i.test(cls)) return true;
       }
       const root = node.getRootNode?.();
       if (root instanceof ShadowRoot) {
@@ -181,20 +177,19 @@ export function hideOverlays() {
     return false;
   }
 
-  function mark(el, gone) {
+  function mark(el) {
     if (!el || el === document.body || el === document.documentElement) return false;
     if (el.hasAttribute("data-wp-style")) return false;
     const cs = getComputedStyle(el);
     if (cs.display === "none" || cs.visibility === "hidden") return false;
     el.setAttribute("data-wp-style", el.getAttribute("style") || "");
-    if (gone) el.style.setProperty("display", "none", "important");
-    else el.style.setProperty("visibility", "hidden", "important");
+    el.style.setProperty("visibility", "hidden", "important");
     names.push(label(el));
     return true;
   }
 
   if (!document.body) return { count: 0, names: [] };
-  const content = contentSpan();
+  const content = textColumn();
   const sticky = [];
   const visit = {
     count: 0,
@@ -206,34 +201,69 @@ export function hideOverlays() {
   walk(document, visit);
 
   for (const el of sticky) {
-    if (inDemo(el) || el.hasAttribute("data-wp-style")) continue;
+    if (inDemo(el)) continue;
     const rect = el.getBoundingClientRect();
     if (rect.width < 8 || rect.height < 8) continue;
     if (rect.width > vw * 0.92 && rect.height > vh * 0.92) continue;
-    const mid = rect.left + rect.width / 2;
+    const overlap = Math.max(
+      0,
+      Math.min(rect.right, content.right) - Math.max(rect.left, content.left),
+    );
+    const overlapRatio = content.width > 0 ? overlap / content.width : 1;
     const center = (content.left + content.right) / 2;
-    const coversCenter = rect.left <= center + 8 && rect.right >= center - 8;
-    const bar = rect.height <= 180 && rect.width >= vw * 0.45 && coversCenter;
-    const inside =
-      mid >= content.left + 12 && mid <= content.right - 12 && rect.width <= content.width + 24;
+    const coversCenter = rect.left <= center && rect.right >= center;
+    const bar = rect.height <= 180 && rect.width >= vw * 0.45 && (coversCenter || overlapRatio >= 0.15);
     const side =
-      !coversCenter &&
+      overlapRatio < 0.15 &&
       rect.width <= vw * 0.5 &&
-      rect.width >= 48 &&
-      rect.height >= 48 &&
-      (mid < content.left || mid > content.right);
+      rect.width >= 40 &&
+      rect.height >= 40;
     const widget =
       rect.width <= 280 &&
       rect.height <= 280 &&
       (rect.left <= 20 || rect.right >= vw - 20) &&
       (rect.top <= 20 || rect.bottom >= vh - 20);
-    if (bar) mark(el, false);
-    else if (inside) continue;
-    else if (side) mark(el, false);
-    else if (widget) mark(el, false);
+    if (bar || side || widget) mark(el);
   }
 
   return { count: names.length, names: names.slice(0, 16), span: content };
+}
+
+export function waitForFrames() {
+  const frames = [];
+  function walk(root) {
+    if (!root?.querySelectorAll || frames.length > 40) return;
+    for (const el of root.querySelectorAll("iframe")) frames.push(el);
+    for (const el of root.querySelectorAll("*")) {
+      if (el.shadowRoot) walk(el.shadowRoot);
+    }
+  }
+  walk(document);
+  const visible = frames.filter((frame) => {
+    const rect = frame.getBoundingClientRect();
+    return rect.width >= 64 && rect.bottom > 8 && rect.top < window.innerHeight - 8;
+  });
+  if (!visible.length) return Promise.resolve(0);
+  const started = performance.now();
+  return new Promise((resolve) => {
+    const tick = () => {
+      const waiting = visible.filter((frame) => {
+        const rect = frame.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) return false;
+        if (rect.height < 100) return true;
+        try {
+          const doc = frame.contentDocument;
+          if (doc && doc.readyState !== "complete") return true;
+        } catch {
+          return false;
+        }
+        return false;
+      });
+      if (!waiting.length || performance.now() - started > 1500) resolve(visible.length);
+      else requestAnimationFrame(tick);
+    };
+    tick();
+  });
 }
 
 export function restorePage() {
