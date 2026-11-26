@@ -1,0 +1,127 @@
+:root {
+  color-scheme: light;
+  --paper: #f3f0e8;
+  --ink: #1c1915;
+  --muted: #5c564c;
+  --stamp: #1f4d3a;
+  --stamp-fg: #f4f1ea;
+  --line: #e4dcd0;
+  --card: #fffdf8;
+  font-family: "Segoe UI", "Source Sans 3", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+
+.bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.mark {
+  width: 18px;
+  height: 22px;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--stamp), var(--stamp)) 0 0 / 100% 6px no-repeat,
+    var(--stamp-fg);
+  border: 1.5px solid var(--stamp);
+}
+
+.meta {
+  margin: 0;
+  flex: 1;
+  min-width: 180px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  min-height: 44px;
+  background: var(--stamp);
+  color: var(--stamp-fg);
+  font: inherit;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button:not(:disabled):hover { filter: brightness(1.08); }
+
+main {
+  padding: 24px 16px 48px;
+}
+
+.status {
+  max-width: 720px;
+  margin: 0 auto 16px;
+  color: var(--muted);
+}
+
+img {
+  display: block;
+  max-width: min(920px, 100%);
+  height: auto;
+  margin: 0 auto;
+  background: white;
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 40px rgba(28, 25, 21, 0.08);
+}
+
+.error {
+  max-width: 560px;
+  margin: 48px auto;
+  padding: 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.error h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.error p { margin: 0; color: var(--muted); line-height: 1.5; }

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Знімок сторінки</title>
+    <link rel="stylesheet" href="result.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <div class="bar-row">
+        <div class="brand">
+          <span class="mark" aria-hidden="true"></span>
+          <span>Whole Page</span>
+        </div>
+        <p id="meta" class="meta"></p>
+      </div>
+      <div class="actions">
+        <button id="png" type="button" disabled>PNG</button>
+        <button id="pdf" type="button" disabled>PDF — одна сторінка</button>
+        <button id="a4" type="button" disabled>PDF — аркуші A4</button>
+      </div>
+    </header>
+    <main>
+      <p id="status" class="status">Відкриваю знімок…</p>
+      <img id="shot" alt="Знімок усієї сторінки" hidden />
+    </main>
+    <script type="module" src="result.js"></script>
+  </body>
+</html>

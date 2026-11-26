@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f3f0e8;
+  --color-ink: #1c1915;
+  --color-muted: #5c564c;
+  --color-stamp: #1f4d3a;
+  --color-stamp-fg: #f4f1ea;
+  --color-line: #e4dcd0;
+  --color-card: #fffdf8;
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+}
