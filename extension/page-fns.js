@@ -100,61 +100,156 @@ export async function preparePage() {
 }
 
 export function hideOverlays() {
-  function isSide(rect, vw) {
-    if (rect.width < 8 || rect.height < 8) return false;
-    if (rect.width > Math.min(420, vw * 0.4)) return false;
-    return rect.left <= 32 || rect.right >= vw - 32;
-  }
-
-  function mark(el, gone) {
-    if (!el || el === document.body || el === document.documentElement) return;
-    if (el.hasAttribute("data-wp-style")) return;
-    const cs = getComputedStyle(el);
-    if (cs.display === "none" || cs.visibility === "hidden") return;
-    el.setAttribute("data-wp-style", el.getAttribute("style") || "");
-    if (gone) el.style.setProperty("display", "none", "important");
-    else el.style.setProperty("visibility", "hidden", "important");
-  }
-
+  const CAP = 25000;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  if (!document.body) return false;
-  for (const el of document.body.querySelectorAll("*")) {
-    let sticky = null;
+  const names = [];
+
+  function label(el) {
+    const id = el.id ? `#${el.id}` : "";
+    const raw = String(el.className || "");
+    const cls = raw.split(/\s+/).filter(Boolean).slice(0, 2).join(".");
+    return `${el.tagName.toLowerCase()}${id}${cls ? `.${cls}` : ""}`;
+  }
+
+  function walk(root, visit) {
+    if (!root?.querySelectorAll || visit.count >= CAP) return;
+    for (const el of root.querySelectorAll("*")) {
+      visit.count += 1;
+      if (visit.count > CAP) return;
+      visit.fn(el);
+      if (el.shadowRoot) walk(el.shadowRoot, visit);
+    }
+  }
+
+  function contentSpan() {
+    const h1 = document.querySelector("h1");
+    let best = null;
+    if (h1) {
+      let node = h1;
+      while (node && node !== document.body && node !== document.documentElement) {
+        const display = getComputedStyle(node).display;
+        if (display !== "contents") {
+          const rect = node.getBoundingClientRect();
+          if (rect.width >= 180 && rect.width <= vw * 0.86 && rect.height >= 32) {
+            if (!best || rect.width > best.width + 24) {
+              best = { left: rect.left, right: rect.right, width: rect.width };
+            }
+          }
+          if (rect.width > vw * 0.92) break;
+        }
+        node = node.parentElement;
+      }
+    }
+    if (!best) {
+      const main = document.querySelector("article, [role='main'], main");
+      if (main && getComputedStyle(main).display !== "contents") {
+        const rect = main.getBoundingClientRect();
+        if (rect.width >= 180 && rect.width <= vw * 0.9) {
+          best = { left: rect.left, right: rect.right, width: rect.width };
+        }
+      }
+    }
+    if (!best) return { left: vw * 0.18, right: vw * 0.82, width: vw * 0.64 };
+    return best;
+  }
+
+  function inDemo(el) {
     let node = el;
-    while (node && node !== document.body && node !== document.documentElement) {
-      const cs = getComputedStyle(node);
-      if (cs.position === "fixed" || cs.position === "sticky") {
-        sticky = node;
-        break;
+    while (node) {
+      if (node.nodeType === 1) {
+        const tag = node.tagName;
+        if (
+          tag === "IFRAME" ||
+          tag === "OBJECT" ||
+          tag === "EMBED" ||
+          tag === "INTERACTIVE-EXAMPLE" ||
+          tag === "MDN-PLAY-RUNNER" ||
+          tag === "MDN-PLAY-EDITOR" ||
+          tag === "MDN-PLAY-CONTROLLER"
+        ) {
+          return true;
+        }
+      }
+      const root = node.getRootNode?.();
+      if (root instanceof ShadowRoot) {
+        node = root.host;
+        continue;
       }
       node = node.parentElement;
     }
-    if (!sticky || sticky.hasAttribute("data-wp-style")) continue;
-    const rect = sticky.getBoundingClientRect();
-    if (rect.width < 8 || rect.height < 8) continue;
-    if (rect.height > vh * 0.65 && rect.width > vw * 0.65) continue;
-    const own = el === sticky ? rect : el.getBoundingClientRect();
-    const bar = rect.height <= 180 && rect.width >= vw * 0.45;
-    const widget =
-      rect.width <= 420 &&
-      rect.height <= 640 &&
-      rect.right >= vw - 28 &&
-      rect.bottom >= vh - 28;
-    if (isSide(rect, vw)) mark(sticky, true);
-    else if (sticky !== el && isSide(own, vw)) mark(el, true);
-    else if (bar || widget) mark(sticky, false);
+    return false;
   }
-  return true;
+
+  function mark(el, gone) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+    if (el.hasAttribute("data-wp-style")) return false;
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden") return false;
+    el.setAttribute("data-wp-style", el.getAttribute("style") || "");
+    if (gone) el.style.setProperty("display", "none", "important");
+    else el.style.setProperty("visibility", "hidden", "important");
+    names.push(label(el));
+    return true;
+  }
+
+  if (!document.body) return { count: 0, names: [] };
+  const content = contentSpan();
+  const sticky = [];
+  const visit = {
+    count: 0,
+    fn(el) {
+      const pos = getComputedStyle(el).position;
+      if (pos === "fixed" || pos === "sticky") sticky.push(el);
+    },
+  };
+  walk(document, visit);
+
+  for (const el of sticky) {
+    if (inDemo(el) || el.hasAttribute("data-wp-style")) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 8 || rect.height < 8) continue;
+    if (rect.width > vw * 0.92 && rect.height > vh * 0.92) continue;
+    const mid = rect.left + rect.width / 2;
+    const center = (content.left + content.right) / 2;
+    const coversCenter = rect.left <= center + 8 && rect.right >= center - 8;
+    const bar = rect.height <= 180 && rect.width >= vw * 0.45 && coversCenter;
+    const inside =
+      mid >= content.left + 12 && mid <= content.right - 12 && rect.width <= content.width + 24;
+    const side =
+      !coversCenter &&
+      rect.width <= vw * 0.5 &&
+      rect.width >= 48 &&
+      rect.height >= 48 &&
+      (mid < content.left || mid > content.right);
+    const widget =
+      rect.width <= 280 &&
+      rect.height <= 280 &&
+      (rect.left <= 20 || rect.right >= vw - 20) &&
+      (rect.top <= 20 || rect.bottom >= vh - 20);
+    if (bar) mark(el, false);
+    else if (inside) continue;
+    else if (side) mark(el, false);
+    else if (widget) mark(el, false);
+  }
+
+  return { count: names.length, names: names.slice(0, 16), span: content };
 }
 
 export function restorePage() {
-  for (const el of document.querySelectorAll("[data-wp-style]")) {
-    const prev = el.getAttribute("data-wp-style") || "";
-    if (prev) el.setAttribute("style", prev);
-    else el.removeAttribute("style");
-    el.removeAttribute("data-wp-style");
+  function restoreTree(root) {
+    if (!root?.querySelectorAll) return;
+    for (const el of root.querySelectorAll("[data-wp-style]")) {
+      const prev = el.getAttribute("data-wp-style") || "";
+      if (prev) el.setAttribute("style", prev);
+      else el.removeAttribute("style");
+      el.removeAttribute("data-wp-style");
+    }
+    for (const el of root.querySelectorAll("*")) {
+      if (el.shadowRoot) restoreTree(el.shadowRoot);
+    }
   }
+  restoreTree(document);
   document.getElementById("wp-hide-style")?.remove();
   const behavior = document.documentElement.dataset.wpScrollBehavior;
   if (behavior !== undefined) {

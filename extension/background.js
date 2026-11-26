@@ -2,7 +2,6 @@ import { hideOverlays, preparePage, restorePage } from "./page-fns.js";
 import { putShot } from "./idb.js";
 
 const busy = new Set();
-const TILE_CSS = 2000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -92,13 +91,6 @@ async function restore(tabId) {
   }
 }
 
-function outputScale(cssWidth, cssHeight, dpr) {
-  let scale = Math.min(Math.max(dpr || 1, 1), 2);
-  if (cssHeight * scale > 16384) scale = 16384 / cssHeight;
-  if (cssWidth * scale > 4096) scale = Math.min(scale, 4096 / cssWidth);
-  return Math.max(0.2, Math.round(scale * 1000) / 1000);
-}
-
 async function shotToPng(bytesList) {
   if (bytesList.length === 1) {
     const size = pngSize(bytesList[0]);
@@ -136,12 +128,6 @@ async function shotToPng(bytesList) {
   const blob = await canvas.convertToBlob({ type: "image/png" });
   if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
   return { blob, width: outW, height: outH, scaled: scale < 0.999 };
-}
-
-function looksLikeViewportOnly(bytes, expectedPx, viewportPx) {
-  const size = pngSize(bytes);
-  if (!size || expectedPx <= viewportPx * 1.25) return false;
-  return size.height < viewportPx * 1.35;
 }
 
 async function settleScroll(tabId, target) {
@@ -188,71 +174,68 @@ async function settleScroll(tabId, target) {
   return last;
 }
 
-async function grab(tabId, params) {
+async function grabViewport(tabId) {
   const result = await send(tabId, "Page.captureScreenshot", {
     format: "png",
     fromSurface: true,
-    captureBeyondViewport: true,
-    ...params,
+    captureBeyondViewport: false,
   });
   if (!result?.data) throw new Error("Chrome не повернув зображення");
   return base64ToBytes(result.data);
 }
 
-async function cropWidth(bytes, cssWidth, cssHeight) {
+async function cropSlice(bytes, cssTop, cssHeight, cssViewport) {
   const size = pngSize(bytes);
-  if (!size || cssHeight < 1) return bytes;
-  const scale = size.height / cssHeight;
-  const wantW = Math.max(1, Math.round(cssWidth * scale));
-  if (size.width <= wantW + 2) return bytes;
+  if (!size || cssViewport < 1 || cssHeight < 1) return bytes;
+  const px = size.height / cssViewport;
+  const top = Math.max(0, Math.round(cssTop * px));
+  const height = Math.max(1, Math.min(size.height - top, Math.round(cssHeight * px)));
+  if (top === 0 && height >= size.height - 2) return bytes;
   const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
-  const canvas = new OffscreenCanvas(wantW, bitmap.height);
-  canvas.getContext("2d").drawImage(bitmap, 0, 0);
+  const canvas = new OffscreenCanvas(bitmap.width, height);
+  canvas.getContext("2d").drawImage(bitmap, 0, top, bitmap.width, height, 0, 0, bitmap.width, height);
   bitmap.close();
   const blob = await canvas.convertToBlob({ type: "image/png" });
   if (!blob) throw new Error("Сторінка завелика, браузер не зібрав зображення. Спробуйте ще раз.");
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-async function captureSurface(tabId, info) {
-  const cssWidth = Math.max(1, Math.round(info.cssWidth));
-  const cssHeight = Math.max(1, Math.round(info.cssHeight));
-  const scale = outputScale(cssWidth, cssHeight, info.dpr);
-  const viewportCss = Math.max(1, info.viewportHeight || 800);
-  const viewportPx = Math.max(1, Math.round(viewportCss * scale));
-  const oneScreen = cssHeight <= viewportCss * 1.05;
-
-  if (oneScreen) {
-    await settleScroll(tabId, 0);
-    const raw = await grab(tabId, {});
-    if (!looksLikeViewportOnly(raw, cssHeight * Math.min(info.dpr || 1, 2), viewportPx)) {
-      return shotToPng([await cropWidth(raw, cssWidth, cssHeight)]);
-    }
-    const clipped = await grab(tabId, {
-      clip: { x: 0, y: 0, width: cssWidth, height: cssHeight, scale },
-    });
-    if (!looksLikeViewportOnly(clipped, cssHeight * scale, viewportPx)) {
-      return shotToPng([clipped]);
-    }
+async function hideForSlice(tabId) {
+  const report = await evaluate(tabId, hideOverlays);
+  if (report?.count) {
+    console.info("[page-to-pdf] hidden", report.count, (report.names || []).join(", "));
   }
+  await send(tabId, "Runtime.evaluate", {
+    expression:
+      "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 30))))",
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  return report;
+}
 
+async function captureSurface(tabId, info) {
+  const cssHeight = Math.max(1, Math.round(info.cssHeight));
   const tiles = [];
-  for (let y = 0; y < cssHeight; y += TILE_CSS) {
-    const pos = await settleScroll(tabId, y);
-    const clipY = y <= pos.maxScroll + 1 ? pos.y : y;
-    if (clipY > 1) await evaluate(tabId, hideOverlays);
-    const height = Math.min(TILE_CSS, cssHeight - clipY);
-    if (height <= 1) break;
-    const tile = await grab(tabId, {
-      clip: { x: 0, y: clipY, width: cssWidth, height, scale },
-    });
-    if (y === 0 && looksLikeViewportOnly(tile, height * scale, viewportPx)) return null;
-    tiles.push(tile);
+  let covered = 0;
+  let guard = 0;
+  while (covered < cssHeight - 1 && guard < 80) {
+    guard += 1;
+    const pos = await settleScroll(tabId, covered);
+    if (covered > 0) await hideForSlice(tabId);
+    const docEnd = Math.min(cssHeight, pos.y + pos.viewport);
+    const start = Math.max(covered, pos.y);
+    const keep = docEnd - start;
+    if (keep <= 1) break;
+    const tile = await grabViewport(tabId);
+    tiles.push(await cropSlice(tile, start - pos.y, keep, pos.viewport));
+    covered = start + keep;
     await chrome.action.setBadgeText({
       tabId,
-      text: `${Math.round((Math.min(cssHeight, clipY + height) / cssHeight) * 100)}`,
+      text: `${Math.min(100, Math.round((covered / cssHeight) * 100))}`,
     });
   }
+  if (!tiles.length) return null;
   return shotToPng(tiles);
 }
 
@@ -266,7 +249,7 @@ async function scrollStitch(tab, cssHeight) {
     let pos;
     try {
       const settled = await settleScroll(tab.id, covered);
-      if (covered > 0) await evaluate(tab.id, hideOverlays);
+      if (covered > 0) await hideForSlice(tab.id);
       pos = {
         y: settled.y,
         viewport: settled.viewport,
