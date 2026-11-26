@@ -28,14 +28,14 @@ function Home() {
       <header className="grid items-end gap-8 lg:grid-cols-5">
         <div className="flex flex-col gap-5 lg:col-span-3">
           <p className="text-sm font-semibold tracking-wide text-stamp uppercase">
-            Розширення для Chrome
+            Full Page Screenshot
           </p>
           <h1 className="font-serif text-4xl leading-tight font-semibold text-ink sm:text-6xl">
-            Вся сторінка, не лише екран
+            Page to PDF
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-muted">
-            Натискаєте іконку — Whole Page знімає сторінку разом із тим, що нижче,
-            і відкриває її, щоб скачати PNG або PDF.
+            Знімає всю сторінку, не лише екран. PDF або PNG можна одразу
+            завантажити в AI.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <a
@@ -69,7 +69,7 @@ function Home() {
           <h2 className="font-serif text-3xl font-semibold">Як знімати</h2>
           <ol className="mt-4 flex flex-col gap-3 text-base leading-relaxed">
             <li>Відкрийте звичайну статтю, документ або лендінг.</li>
-            <li>Натисніть іконку Whole Page або Alt+Shift+Y.</li>
+            <li>Натисніть іконку Page to PDF або Alt+Shift+Y.</li>
             <li>
               Зачекайте. Chrome на мить напише, що сторінку налагоджують — так
               знімок виходить цілісним, без швів.

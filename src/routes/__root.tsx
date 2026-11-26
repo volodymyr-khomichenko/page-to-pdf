@@ -8,7 +8,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Whole Page — вся сторінка в PNG і PDF" },
+      { title: "Page to PDF — Full Page Screenshot" },
       { name: "description", content: "Розширення для Chrome: знімає сторінку разом зі скролом і зберігає PNG або PDF." },
       { name: "theme-color", content: "#1f4d3a" },
     ],
