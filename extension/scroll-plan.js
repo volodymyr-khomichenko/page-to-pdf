@@ -96,3 +96,77 @@ export function sidebarColumns(width, scrollerX, scrollerWidth) {
     right: rightEdge < width ? { x: rightEdge, width: width - rightEdge } : null,
   };
 }
+
+/** CSS pixels of overlap kept between inner-scroll screens so the join can be matched. */
+export const INNER_OVERLAP = 120;
+export const INNER_BAND_MARGIN = 20;
+export const MATCH_WINDOW = 60;
+export const MATCH_THRESHOLD = 24;
+
+/** Next scroll position: one view minus the overlap, never past the end. */
+export function innerScrollTarget(previousScrollTop, clientHeight, maxScroll, overlap = INNER_OVERLAP) {
+  const step = Math.max(1, clientHeight - overlap);
+  const target = Math.min(maxScroll, previousScrollTop + step);
+  if (target <= previousScrollTop + 0.5) return null;
+  return target;
+}
+
+/**
+ * Where the previous strip's bottom band sits in the new frame.
+ * `cut` is the device-pixel row in the new frame where unseen pixels begin.
+ * A flat band or a poor match returns matched:false so the caller can use scrollTop.
+ */
+export function matchBandOffset({
+  band,
+  bandWidth,
+  bandHeight,
+  frame,
+  frameWidth,
+  frameHeight,
+  expectedTop,
+  windowPx = MATCH_WINDOW,
+  threshold = MATCH_THRESHOLD,
+}) {
+  const width = Math.min(bandWidth, frameWidth);
+  if (bandHeight < 2 || width < 2 || frameHeight < bandHeight) {
+    return { matched: false, flat: true, mean: Infinity, cut: null };
+  }
+  let min = 255;
+  let max = 0;
+  const samples = bandHeight * width;
+  const stride = Math.max(1, Math.floor(samples / 1500));
+  for (let i = 0; i < samples; i += stride) {
+    const row = Math.floor(i / width);
+    const col = i % width;
+    const value = band[row * bandWidth + col];
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  const flat = max - min < 8;
+  const guess = Math.round(expectedTop);
+  const start = Math.max(0, guess - windowPx);
+  const end = Math.min(frameHeight - bandHeight, guess + windowPx);
+  if (end < start) return { matched: false, flat, mean: Infinity, cut: null };
+  let best = Infinity;
+  let bestTop = Math.min(Math.max(guess, start), end);
+  const denom = bandHeight * width;
+  for (let y = start; y <= end; y += 1) {
+    let diff = 0;
+    for (let row = 0; row < bandHeight; row += 1) {
+      const frameAt = (y + row) * frameWidth;
+      const bandAt = row * bandWidth;
+      for (let x = 0; x < width; x += 1) {
+        const delta = frame[frameAt + x] - band[bandAt + x];
+        diff += delta < 0 ? -delta : delta;
+      }
+    }
+    const mean = diff / denom;
+    if (mean < best) {
+      best = mean;
+      bestTop = y;
+      if (mean === 0) break;
+    }
+  }
+  if (flat || best > threshold) return { matched: false, flat, mean: best, cut: null, top: bestTop };
+  return { matched: true, flat: false, mean: best, cut: bestTop + bandHeight, top: bestTop };
+}

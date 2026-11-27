@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseScrollMode, contentBox, nextInnerStrip, sidebarColumns } from "../extension/scroll-plan.js";
+import { chooseScrollMode, contentBox, innerScrollTarget, matchBandOffset, nextInnerStrip, sidebarColumns } from "../extension/scroll-plan.js";
 
 test("a normal scrolling page stays on the document", () => {
   const mode = chooseScrollMode({
@@ -129,6 +129,49 @@ test("the content box excludes the scrollbar and the borders", () => {
   assert.equal(box.width, 800);
   assert.equal(box.height, 700);
   assert.equal(box.scrollbar, 17);
+});
+
+test("an inner step keeps a 120px overlap", () => {
+  assert.equal(innerScrollTarget(0, 1135, 4000), 1135 - 120);
+  assert.equal(innerScrollTarget(2000, 835, 2100), 2100);
+  assert.equal(innerScrollTarget(2100, 835, 2100), null);
+});
+
+test("pixel match finds a shifted join and rejects a flat band", () => {
+  const width = 30;
+  const frameHeight = 90;
+  const bandHeight = 20;
+  const frame = new Uint8Array(width * frameHeight);
+  for (let y = 0; y < frameHeight; y += 1) {
+    for (let x = 0; x < width; x += 1) frame[y * width + x] = (y * 3 + x * 5) % 251;
+  }
+  const trueTop = 17;
+  const band = frame.subarray(trueTop * width, (trueTop + bandHeight) * width);
+  const found = matchBandOffset({
+    band,
+    bandWidth: width,
+    bandHeight,
+    frame,
+    frameWidth: width,
+    frameHeight,
+    expectedTop: trueTop - 6,
+  });
+  assert.equal(found.matched, true);
+  assert.equal(found.top, trueTop);
+  assert.equal(found.cut, trueTop + bandHeight);
+
+  const flat = new Uint8Array(width * bandHeight).fill(240);
+  const missed = matchBandOffset({
+    band: flat,
+    bandWidth: width,
+    bandHeight,
+    frame,
+    frameWidth: width,
+    frameHeight,
+    expectedTop: 10,
+  });
+  assert.equal(missed.matched, false);
+  assert.equal(missed.flat, true);
 });
 
 test("the sidebar column continues beside the scroller", () => {

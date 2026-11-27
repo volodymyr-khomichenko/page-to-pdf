@@ -1,5 +1,5 @@
 import { framesNeedWait, hideOverlays, preparePage, restorePage } from "./page-fns.js";
-import { chooseScrollMode, contentBox, nextInnerStrip, sidebarColumns, viewportArea } from "./scroll-plan.js";
+import { chooseScrollMode, contentBox, INNER_BAND_MARGIN, INNER_OVERLAP, innerScrollTarget, MATCH_THRESHOLD, MATCH_WINDOW, matchBandOffset, nextInnerStrip, sidebarColumns, viewportArea } from "./scroll-plan.js";
 import { putShot } from "./idb.js";
 
 const busy = new Set();
@@ -277,7 +277,7 @@ async function showProgress(tabId, n, total) {
       if (!el) {
         el = document.createElement("div");
         el.id = "wp-progress";
-        el.setAttribute("style", "position:fixed;z-index:2147483647;left:50%;bottom:16px;transform:translateX(-50%);background:#2449D8;color:#fff;font:700 13px/1.2 Roboto,Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;padding:8px 14px;border-radius:3px;pointer-events:none");
+        el.setAttribute("style", "position:fixed;z-index:2147483647;left:50%;top:16px;transform:translateX(-50%);background:#2449D8;color:#fff;font:700 13px/1.2 Roboto,Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;padding:8px 14px;border-radius:3px;pointer-events:none");
         document.documentElement.appendChild(el);
       }
       el.textContent = ${JSON.stringify(label)};
@@ -427,6 +427,30 @@ async function readScroller(tabId) {
   });
 }
 
+async function imageGray(bytes) {
+  const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+  const width = bitmap.width;
+  const height = bitmap.height;
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(bitmap, 0, 0);
+  const data = ctx.getImageData(0, 0, width, height).data;
+  bitmap.close();
+  const gray = new Uint8Array(width * height);
+  for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
+    gray[p] = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+  }
+  return { gray, width, height };
+}
+
+function deviceBox(box, scaleX, scaleY) {
+  const x0 = Math.round(box.left * scaleX);
+  const x1 = Math.round((box.left + box.width) * scaleX);
+  const y0 = Math.round(box.top * scaleY);
+  const y1 = Math.round((box.top + box.height) * scaleY);
+  return { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
+}
+
 async function captureInner(tabId, info) {
   const CAP = 30000;
   const tiles = [];
@@ -445,7 +469,10 @@ async function captureInner(tabId, info) {
   let clientHeight = Math.max(1, box.height);
   let previousScrollTop = 0;
   let truncated = false;
-  const estimated = Math.max(1, Math.ceil(Math.min(raw.scrollHeight, CAP) / clientHeight));
+  const estimated = Math.max(
+    1,
+    Math.ceil(Math.min(raw.scrollHeight, CAP) / Math.max(1, clientHeight - INNER_OVERLAP)),
+  );
 
   await showProgress(tabId, 1, estimated);
   await settleScroll(tabId, 0);
@@ -462,11 +489,13 @@ async function captureInner(tabId, info) {
   const firstSize = pngSize(first);
   const scaleX = firstSize ? firstSize.width / Math.max(1, info.cssWidth) : info.dpr || 1;
   const scaleY = firstSize ? firstSize.height / viewport : info.dpr || 1;
+  const firstRect = deviceBox(box, scaleX, scaleY);
   tiles.push({
     bytes: first,
     full: true,
-    scrollerBottom: Math.round((box.top + clientHeight) * scaleY),
+    scrollerBottom: firstRect.y + firstRect.height,
   });
+  let previousView = await imageGray(await cropDevicePixels(first, firstRect));
 
   let guard = 0;
   while (guard < 80) {
@@ -476,49 +505,71 @@ async function captureInner(tabId, info) {
     box = contentBox(live);
     clientHeight = Math.max(1, box.height);
     const maxScroll = Math.max(0, live.scrollHeight - clientHeight);
-    const target = Math.min(maxScroll, previousScrollTop + clientHeight);
-    if (target <= previousScrollTop + 0.5) break;
+    const target = innerScrollTarget(previousScrollTop, clientHeight, maxScroll);
+    if (target == null) break;
     const outputCss = viewport + Math.max(0, previousScrollTop);
     if (outputCss >= CAP) {
       truncated = true;
       break;
     }
     await showProgress(tabId, tiles.length + 1, estimated);
-    const pos = await settleScroll(tabId, target);
-    const strip = nextInnerStrip({
+    await settleScroll(tabId, target);
+    await waitForSlice(tabId);
+    await clearProgress(tabId);
+    const fresh = await readScroller(tabId);
+    if (fresh) {
+      raw = fresh;
+      box = contentBox(fresh);
+      clientHeight = Math.max(1, box.height);
+    }
+    const scrollTop = fresh ? fresh.scrollTop || 0 : target;
+    const frame = await grabViewport(tabId);
+    const rect = deviceBox(box, scaleX, scaleY);
+    const viewBytes = await cropDevicePixels(frame, rect);
+    const view = await imageGray(viewBytes);
+    const bandH = Math.round((INNER_OVERLAP - INNER_BAND_MARGIN) * scaleY);
+    const expectedCut = Math.round((previousScrollTop + clientHeight - scrollTop) * scaleY);
+    const fallbackStrip = nextInnerStrip({
       clientHeight,
-      scrollHeight: live.scrollHeight,
-      scrollTop: pos.scrollTop,
+      scrollHeight: (fresh || live).scrollHeight,
+      scrollTop,
       previousScrollTop,
       dpr: scaleY,
     });
-    await waitForSlice(tabId);
-    await clearProgress(tabId);
-    if (!strip) break;
-    let cropTop = strip.cropTop;
-    let stripHeight = strip.height;
-    if (cropTop < 0) {
-      stripHeight += cropTop;
-      cropTop = 0;
+    let cut = fallbackStrip ? Math.max(0, fallbackStrip.cropTop) : Math.max(0, expectedCut);
+    if (previousView && bandH >= 8 && bandH < previousView.height && expectedCut > bandH) {
+      const band = previousView.gray.subarray((previousView.height - bandH) * previousView.width);
+      const match = matchBandOffset({
+        band,
+        bandWidth: previousView.width,
+        bandHeight: bandH,
+        frame: view.gray,
+        frameWidth: view.width,
+        frameHeight: view.height,
+        expectedTop: expectedCut - bandH,
+        windowPx: MATCH_WINDOW,
+        threshold: MATCH_THRESHOLD,
+      });
+      if (match.matched) cut = match.cut;
     }
-    if (stripHeight <= 0) break;
-    const frame = await grabViewport(tabId);
-    const x0 = Math.round(box.left * scaleX);
-    const x1 = Math.round((box.left + box.width) * scaleX);
-    const y0 = Math.round(box.top * scaleY) + cropTop;
-    tiles.push({
-      bytes: await cropDevicePixels(frame, {
-        x: x0,
-        y: y0,
-        width: Math.max(1, x1 - x0),
-        height: stripHeight,
-      }),
-      x: box.left,
-      pixelX: x0,
-    });
-    hidden.push(0);
-    previousScrollTop = pos.scrollTop;
-    if (pos.scrollTop >= maxScroll - 1) break;
+    if (view.height - cut >= 2) {
+      tiles.push({
+        bytes: await cropDevicePixels(viewBytes, {
+          x: 0,
+          y: cut,
+          width: view.width,
+          height: view.height - cut,
+        }),
+        x: box.left,
+        pixelX: rect.x,
+      });
+      hidden.push(0);
+    } else if (scrollTop >= maxScroll - 1) {
+      break;
+    }
+    previousView = view;
+    previousScrollTop = scrollTop;
+    if (scrollTop >= maxScroll - 1) break;
   }
   await clearProgress(tabId);
   const image = await composeInner(tiles, info.cssWidth);

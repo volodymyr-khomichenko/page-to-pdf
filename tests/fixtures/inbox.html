@@ -14,14 +14,14 @@
       .app {
         display: grid;
         grid-template-columns: 240px 1fr;
-        grid-template-rows: 56px 1fr;
+        grid-template-rows: 65px 1fr;
         height: 100%;
       }
       header {
         grid-column: 1 / -1;
         background: #2449d8;
         color: #ffffff;
-        font: 700 16px/56px Roboto, Arial, sans-serif;
+        font: 700 16px/65px Roboto, Arial, sans-serif;
         padding: 0 16px;
       }
       aside {
@@ -35,15 +35,21 @@
         background: #ffffff;
       }
       .row {
+        position: relative;
         height: 44px;
         box-sizing: border-box;
         border-bottom: 1px solid #dce1ea;
-        padding: 12px 16px;
+        padding: 12px 16px 0 48px;
         font: 16px/20px Roboto, Arial, sans-serif;
         color: #111827;
+        background: #ffffff;
       }
-      .row:nth-child(odd) {
-        background: #f4f7fb;
+      .swatch {
+        position: absolute;
+        left: 8px;
+        top: 8px;
+        width: 28px;
+        height: 28px;
       }
     </style>
   </head>
@@ -51,16 +57,26 @@
     <div class="app">
       <header>Inbox</header>
       <aside>Mailboxes</aside>
-      <div id="list">
-        <!-- rows injected so the fixture file stays readable; the test also accepts these 60 -->
-      </div>
+      <div id="list"></div>
     </div>
     <script>
+      function swatchColor(n) {
+        return [
+          20 + ((n * 47) % 200),
+          20 + ((n * 89) % 200),
+          20 + ((n * 131) % 200),
+        ];
+      }
       const list = document.getElementById("list");
       for (let i = 1; i <= 60; i += 1) {
         const row = document.createElement("div");
         row.className = "row";
         row.textContent = `Row ${String(i).padStart(2, "0")}`;
+        const swatch = document.createElement("div");
+        swatch.className = "swatch";
+        const [r, g, b] = swatchColor(i);
+        swatch.style.background = `rgb(${r}, ${g}, ${b})`;
+        row.appendChild(swatch);
         list.appendChild(row);
       }
     </script>

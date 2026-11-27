@@ -37,7 +37,7 @@ Match khomichenko.com: **Roboto** at 400, 500, and 700, then Arial, then sans-se
 - Buttons: 3px corner radius, min-height 44px, uppercase, bold. Primary is a solid accent. Secondary is a white fill with an accent border.
 - Panels and the result image use a 1px `#DCE1EA` border. No large shadows, no pills (`border-radius: 999px`).
 - Spacing stays on the existing landing rhythm: page padding, sections separated by a top border.
-- The capture progress chip uses the same accent, white type, and 3px radius. That is color only. Do not change how slices are taken.
+- The capture progress chip is fixed to the top centre of the page being captured. It uses the accent, white type, uppercase, and a 3px radius. Do not change how slices are taken.
 - Do not add a “Available in Chrome Web Store” badge, or any store badge, before the listing is actually published.
 
 ## Assets
