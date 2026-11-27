@@ -37,6 +37,9 @@ function humanError(error) {
   if (/detach|cancel/i.test(message)) {
     return t("captureInterrupted");
   }
+  if (/cannot access a |extensions gallery|cannot be scripted|webstore/i.test(message)) {
+    return t("blockedPage");
+  }
   if (/permission|activeTab|captureVisibleTab/i.test(message)) {
     return t("visibleDenied");
   }
@@ -736,7 +739,14 @@ async function openResult(id) {
 
 async function capture(tab) {
   if (!tab?.id) throw new Error(t("noTab"));
-  if (blockedUrl(tab.url || "")) {
+  if (!tab.url && !tab.pendingUrl) {
+    try {
+      tab = await chrome.tabs.get(tab.id);
+    } catch {
+      /* the click already identified the tab */
+    }
+  }
+  if (blockedUrl(tab.url || tab.pendingUrl || "")) {
     throw new Error(t("blockedPage"));
   }
   if (busy.has(tab.id)) throw new Error(t("alreadyBusy"));
