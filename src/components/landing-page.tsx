@@ -1,6 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { Download, FileImage, FileText, PanelTop } from "lucide-react";
+import { FileImage, FileText, PanelTop } from "lucide-react";
 import type { ReactNode } from "react";
+
+/** Swap this for the listing URL once the item is published. */
+export const CHROME_STORE_URL =
+  "https://chromewebstore.google.com/search/Page%20to%20PDF%20Full%20Page%20Screenshot";
 
 const icons = [
   <FileImage className="size-5" aria-hidden="true" />,
@@ -10,11 +14,11 @@ const icons = [
 
 export type LandingCopy = {
   lang: "en" | "uk";
-  eyebrow: string | null;
+  kicker: string;
   title: string;
   subtitle: string;
-  download: string;
-  version: string;
+  cta: string;
+  storeNote: string;
   installLabel: string;
   steps: { title: string; text: string }[];
   howTitle: string;
@@ -27,29 +31,30 @@ export type LandingCopy = {
 
 export const englishCopy: LandingCopy = {
   lang: "en",
-  eyebrow: null,
+  kicker: "Chrome extension",
   title: "Page to PDF — Full Page Screenshot",
   subtitle:
     "Capture a logged-in dashboard or private page as PNG or PDF, then give the file to an AI.",
-  download: "Download extension",
-  version: "Version 1.0.9. Not in the Chrome Web Store yet.",
-  installLabel: "How to install",
+  cta: "Add to Chrome",
+  storeNote: "Free on the Chrome Web Store.",
+  installLabel: "How to use",
   steps: [
     {
-      title: "Download and unzip",
-      text: "You'll get a folder called whole-page. Give Chrome that folder, not the zip.",
+      title: "Add to Chrome",
+      text: "Install Page to PDF from the Chrome Web Store. The icon appears in the toolbar.",
     },
     {
-      title: "Turn on Developer mode",
-      text: "On chrome://extensions, the Developer mode switch is in the top right.",
+      title: "Open your page",
+      text: "Open a page you're already signed in to: analytics, an ad account, a CRM, an admin panel or an internal tool.",
     },
     {
-      title: "Load unpacked",
-      text: "Click Load unpacked and pick the whole-page folder. The icon appears in the toolbar.",
+      title: "Save the file",
+      text: "Click the icon or press Alt+Shift+Y, then download PNG or PDF from the new tab.",
     },
   ],
   howTitle: "How to capture",
   how: [
+    "Add Page to PDF from the Chrome Web Store.",
     "Open a page you're already signed in to: analytics, an ad account, a CRM, an admin panel or an internal tool.",
     "Click the Page to PDF icon or press Alt+Shift+Y.",
     "Wait a moment. Chrome briefly shows that the page is being debugged, which is how the capture comes out in one piece, without seams.",
@@ -80,29 +85,30 @@ export const englishCopy: LandingCopy = {
 
 export const ukrainianCopy: LandingCopy = {
   lang: "uk",
-  eyebrow: "Full Page Screenshot",
-  title: "Page to PDF",
+  kicker: "Розширення для Chrome",
+  title: "Page to PDF — Full Page Screenshot",
   subtitle:
     "Знімає сторінку, яку не витягнеш публічно: кабінет, аналітику, адмінку. PDF або PNG можна одразу дати в AI.",
-  download: "Скачати розширення",
-  version: "Версія 1.0.9. У Chrome Web Store ще немає.",
-  installLabel: "Як поставити",
+  cta: "Додати в Chrome",
+  storeNote: "Безкоштовно в Chrome Web Store.",
+  installLabel: "Як користуватися",
   steps: [
     {
-      title: "Скачайте і розпакуйте",
-      text: "Всередині буде папка whole-page. Саме її, не архів, треба дати Chrome.",
+      title: "Додайте в Chrome",
+      text: "Поставте Page to PDF з Chrome Web Store. Іконка з’явиться на панелі.",
     },
     {
-      title: "Увімкніть режим розробника",
-      text: "На сторінці chrome://extensions перемикач «Режим розробника» зверху справа.",
+      title: "Відкрийте свою сторінку",
+      text: "Відкрийте сторінку, на яку ви вже увійшли: аналітику, рекламний кабінет, CRM, адмінку чи внутрішній інструмент.",
     },
     {
-      title: "Завантажте розпаковане",
-      text: "«Завантажити розпаковане» і виберіть папку whole-page. Іконка з’явиться на панелі.",
+      title: "Збережіть файл",
+      text: "Натисніть іконку або Alt+Shift+Y і скачайте PNG або PDF у новій вкладці.",
     },
   ],
   howTitle: "Як знімати",
   how: [
+    "Додайте Page to PDF з Chrome Web Store.",
     "Відкрийте сторінку, на яку ви вже увійшли: аналітику, рекламний кабінет, CRM, адмінку чи внутрішній інструмент.",
     "Натисніть іконку Page to PDF або Alt+Shift+Y.",
     "Зачекайте. Chrome на мить напише, що сторінку налагоджують — так знімок виходить цілісним, без швів.",
@@ -141,83 +147,91 @@ export const alternateLinks = [
 
 export function LandingPage({ copy }: { copy: LandingCopy }) {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-5 py-10 sm:px-8 sm:py-16">
-      <header className="flex flex-col gap-6">
-        <LanguageSwitch lang={copy.lang} />
-        <div className="grid items-end gap-8 lg:grid-cols-5">
+    <div className="min-h-screen bg-white">
+      <header className="border-b border-line bg-white">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
+          <a
+            href="https://khomichenko.com/"
+            className="text-lg font-bold tracking-tight text-ink no-underline"
+          >
+            Volodymyr Khomichenko
+          </a>
+          <LanguageSwitch lang={copy.lang} />
+        </div>
+      </header>
+
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-14 px-5 py-12 sm:px-8 sm:py-16">
+        <section className="grid items-start gap-10 lg:grid-cols-5">
           <div className="flex flex-col gap-5 lg:col-span-3">
-            {copy.eyebrow ? (
-              <p className="text-sm font-semibold tracking-wide text-stamp uppercase">
-                {copy.eyebrow}
-              </p>
-            ) : null}
-            <h1 className="font-serif text-4xl leading-tight font-semibold text-ink sm:text-5xl">
+            <p className="text-xs font-bold tracking-[0.14em] text-stamp uppercase">{copy.kicker}</p>
+            <h1 className="max-w-xl text-4xl leading-tight font-bold text-ink sm:text-[42px] sm:leading-[1.2]">
               {copy.title}
             </h1>
             <p className="max-w-xl text-lg leading-relaxed text-muted">{copy.subtitle}</p>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
               <a
-                href="/whole-page.zip"
-                download="whole-page.zip"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-stamp px-5 text-base font-semibold text-stamp-fg no-underline"
+                href={CHROME_STORE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-12 items-center justify-center rounded-[3px] bg-stamp px-8 text-sm font-bold tracking-wide text-white uppercase no-underline"
               >
-                <Download className="size-5" aria-hidden="true" />
-                {copy.download}
+                {copy.cta}
               </a>
-              <p className="text-sm text-muted">{copy.version}</p>
+              <p className="text-sm text-muted">{copy.storeNote}</p>
             </div>
           </div>
           <div className="lg:col-span-2">
             <ResultPreview title={copy.previewTitle} kpis={copy.kpis} />
           </div>
-        </div>
-      </header>
+        </section>
 
-      <section className="grid gap-4 md:grid-cols-3" aria-label={copy.installLabel}>
-        {copy.steps.map((step, index) => (
-          <article key={step.title} className="rounded-2xl border border-line bg-card p-5">
-            <p className="font-serif text-3xl font-semibold text-stamp">{index + 1}</p>
-            <h2 className="mt-3 text-lg font-semibold">{step.title}</h2>
-            <p className="mt-2 leading-relaxed text-muted">{step.text}</p>
-          </article>
-        ))}
-      </section>
+        <section className="grid gap-8 border-t border-line pt-10 md:grid-cols-3" aria-label={copy.installLabel}>
+          {copy.steps.map((step, index) => (
+            <article key={step.title}>
+              <p className="text-sm font-bold text-stamp">{String(index + 1).padStart(2, "0")}</p>
+              <h2 className="mt-2 text-xl font-bold text-ink">{step.title}</h2>
+              <p className="mt-2 leading-relaxed text-muted">{step.text}</p>
+            </article>
+          ))}
+        </section>
 
-      <section className="grid gap-8 border-t border-line pt-8 lg:grid-cols-2">
-        <div>
-          <h2 className="font-serif text-3xl font-semibold">{copy.howTitle}</h2>
-          <ol className="mt-4 flex flex-col gap-3 text-base leading-relaxed">
-            {copy.how.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ol>
-        </div>
-        <div className="rounded-2xl border border-line bg-card p-5">
-          <h2 className="text-lg font-semibold">{copy.limitsTitle}</h2>
-          <ul className="mt-4 flex flex-col gap-4">
-            {copy.limits.map((limit, index) => (
-              <Limit key={limit.title} icon={icons[index]} title={limit.title} text={limit.text} />
-            ))}
-          </ul>
-        </div>
-      </section>
-      <footer className="border-t border-line pt-6 text-sm">
-        <a
-          href="https://khomichenko.com/privacy-policy/#page-to-pdf"
-          target="_blank"
-          rel="noreferrer"
-          className="text-muted"
-        >
-          Privacy policy
-        </a>
-      </footer>
-    </main>
+        <section className="grid gap-10 border-t border-line pt-10 lg:grid-cols-2">
+          <div>
+            <h2 className="text-3xl font-bold text-ink">{copy.howTitle}</h2>
+            <ol className="mt-5 flex list-decimal flex-col gap-3 pl-5 leading-relaxed">
+              {copy.how.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ol>
+          </div>
+          <div className="border border-line p-6">
+            <h2 className="text-xl font-bold text-ink">{copy.limitsTitle}</h2>
+            <ul className="mt-5 flex flex-col gap-5">
+              {copy.limits.map((limit, index) => (
+                <Limit key={limit.title} icon={icons[index]} title={limit.title} text={limit.text} />
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <footer className="border-t border-line pt-6 text-sm">
+          <a
+            href="https://khomichenko.com/privacy-policy/#page-to-pdf"
+            target="_blank"
+            rel="noreferrer"
+            className="text-stamp no-underline"
+          >
+            Privacy policy
+          </a>
+        </footer>
+      </main>
+    </div>
   );
 }
 
 function LanguageSwitch({ lang }: { lang: "en" | "uk" }) {
-  const on = "text-sm font-semibold text-ink no-underline";
-  const off = "text-sm font-semibold text-muted no-underline";
+  const on = "text-sm font-bold text-ink no-underline";
+  const off = "text-sm font-bold text-stamp no-underline";
   return (
     <nav aria-label={lang === "uk" ? "Мова" : "Language"} className="flex items-center gap-2">
       {lang === "en" ? (
@@ -254,10 +268,10 @@ function ResultPreview({
 }) {
   const bars = [42, 68, 50, 84, 58, 96, 72];
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm" aria-hidden="true">
+    <div className="border border-line bg-white" aria-hidden="true">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <span className="text-sm font-semibold">{title}</span>
-        <span className="text-xs text-muted">PNG · PDF</span>
+        <span className="text-sm font-bold text-ink">{title}</span>
+        <span className="text-xs font-medium tracking-wide text-muted uppercase">PNG · PDF</span>
       </div>
       <div className="flex gap-3 p-4">
         <div className="flex w-12 shrink-0 flex-col gap-2 pt-1">
@@ -270,19 +284,15 @@ function ResultPreview({
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="grid grid-cols-3 gap-2">
             {kpis.map((kpi) => (
-              <div key={kpi.label} className="rounded-lg border border-line bg-paper px-2 py-2">
+              <div key={kpi.label} className="border border-line px-2 py-2">
                 <p className="text-[11px] text-muted">{kpi.label}</p>
-                <p className="text-sm font-semibold text-ink">{kpi.value}</p>
+                <p className="text-sm font-bold text-ink">{kpi.value}</p>
               </div>
             ))}
           </div>
-          <div className="flex h-20 items-end gap-1.5 rounded-lg border border-line bg-paper px-3 py-2">
+          <div className="flex h-20 items-end gap-1.5 border border-line px-3 py-2">
             {bars.map((height, index) => (
-              <div
-                key={index}
-                className="flex-1 rounded-sm bg-stamp"
-                style={{ height: `${height}%` }}
-              />
+              <div key={index} className="flex-1 bg-stamp" style={{ height: `${height}%` }} />
             ))}
           </div>
         </div>
@@ -296,7 +306,7 @@ function Limit({ icon, title, text }: { icon: ReactNode; title: string; text: st
     <li className="flex gap-3">
       <span className="mt-0.5 text-stamp">{icon}</span>
       <span>
-        <span className="block font-semibold">{title}</span>
+        <span className="block font-bold text-ink">{title}</span>
         <span className="mt-1 block leading-relaxed text-muted">{text}</span>
       </span>
     </li>

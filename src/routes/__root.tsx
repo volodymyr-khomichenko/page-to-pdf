@@ -8,7 +8,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#1f4d3a" },
+      { name: "theme-color", content: "#5b79ff" },
       { property: "og:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },
@@ -27,7 +27,7 @@ export const Route = createRootRoute({
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap",
       },
     ],
   }),
