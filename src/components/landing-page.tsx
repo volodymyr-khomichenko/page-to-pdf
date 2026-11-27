@@ -27,7 +27,6 @@ export type LandingCopy = {
   limitsTitle: string;
   limits: { title: string; text: string }[];
   previewTitle: string;
-  kpis: { label: string; value: string }[];
 };
 
 export const englishCopy: LandingCopy = {
@@ -78,11 +77,6 @@ export const englishCopy: LandingCopy = {
     },
   ],
   previewTitle: "Dashboard",
-  kpis: [
-    { label: "Visits", value: "12.4k" },
-    { label: "Leads", value: "318" },
-    { label: "Conversion", value: "4.8%" },
-  ],
 };
 
 export const ukrainianCopy: LandingCopy = {
@@ -133,11 +127,6 @@ export const ukrainianCopy: LandingCopy = {
     },
   ],
   previewTitle: "Кабінет",
-  kpis: [
-    { label: "Візити", value: "12,4к" },
-    { label: "Заявки", value: "318" },
-    { label: "Конверсія", value: "4,8%" },
-  ],
 };
 
 const SITE = "https://page-to-pdf-screenshot.vercel.app";
@@ -190,7 +179,7 @@ export function LandingPage({ copy }: { copy: LandingCopy }) {
             </div>
           </div>
           <div className="lg:col-span-2">
-            <ResultPreview title={copy.previewTitle} kpis={copy.kpis} />
+            <ResultPreview title={copy.previewTitle} />
           </div>
         </section>
 
@@ -268,45 +257,15 @@ function LanguageSwitch({ lang }: { lang: "en" | "uk" }) {
   );
 }
 
-function ResultPreview({
-  title,
-  kpis,
-}: {
-  title: string;
-  kpis: { label: string; value: string }[];
-}) {
-  const bars = [42, 68, 50, 84, 58, 96, 72];
+function ResultPreview({ title }: { title: string }) {
   return (
-    <div className="border border-line bg-white" aria-hidden="true">
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <span className="text-sm font-bold text-ink">{title}</span>
-        <span className="text-xs font-medium tracking-wide text-muted uppercase">PNG · PDF</span>
-      </div>
-      <div className="flex gap-3 p-4">
-        <div className="flex w-12 shrink-0 flex-col gap-2 pt-1">
-          <div className="h-2 rounded-full bg-stamp" />
-          <div className="h-2 w-9 rounded-full bg-line" />
-          <div className="h-2 rounded-full bg-line" />
-          <div className="h-2 w-8 rounded-full bg-line" />
-          <div className="h-2 w-10 rounded-full bg-line" />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="grid grid-cols-3 gap-2">
-            {kpis.map((kpi) => (
-              <div key={kpi.label} className="border border-line px-2 py-2">
-                <p className="text-[11px] text-muted">{kpi.label}</p>
-                <p className="text-sm font-bold text-ink">{kpi.value}</p>
-              </div>
-            ))}
-          </div>
-          <div className="flex h-20 items-end gap-1.5 border border-line px-3 py-2">
-            {bars.map((height, index) => (
-              <div key={index} className="flex-1 bg-stamp" style={{ height: `${height}%` }} />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+    <img
+      src="/brand/dashboard-preview.png"
+      alt={title}
+      width={800}
+      height={400}
+      className="w-full border border-line"
+    />
   );
 }
 

@@ -8,14 +8,14 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#5b79ff" },
+      { name: "theme-color", content: "#2449D8" },
       { property: "og:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },
     ],
     links: [
-      { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", type: "image/png", href: "/brand/icon32.png", sizes: "32x32" },
+      { rel: "icon", type: "image/svg+xml", href: "/brand/icon32.svg" },
       { rel: "stylesheet", href: appCss },
       ...(import.meta.env.PROD
         ? []

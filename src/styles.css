@@ -2,11 +2,11 @@
 
 @theme {
   --color-paper: #ffffff;
-  --color-ink: #0a0a0a;
-  --color-muted: #494949;
-  --color-stamp: #5b79ff;
+  --color-ink: #111827;
+  --color-muted: #526071;
+  --color-stamp: #2449d8;
   --color-stamp-fg: #ffffff;
-  --color-line: #e6e6e6;
+  --color-line: #dce1ea;
   --color-card: #ffffff;
   --font-sans: "Roboto", Arial, sans-serif;
   --font-serif: "Roboto", Arial, sans-serif;
@@ -19,8 +19,8 @@
   }
 
   body {
-    background: #fff;
-    color: #494949;
+    background: #ffffff;
+    color: #111827;
     font-family: Roboto, Arial, sans-serif;
     line-height: 1.7;
   }

@@ -1,13 +1,13 @@
 :root {
   color-scheme: light;
-  --paper: #f3f0e8;
-  --ink: #1c1915;
-  --muted: #5c564c;
-  --stamp: #1f4d3a;
-  --stamp-fg: #f4f1ea;
-  --line: #e4dcd0;
-  --card: #fffdf8;
-  font-family: "Segoe UI", "Source Sans 3", sans-serif;
+  --paper: #ffffff;
+  --ink: #111827;
+  --muted: #526071;
+  --stamp: #2449d8;
+  --stamp-fg: #ffffff;
+  --line: #dce1ea;
+  --card: #ffffff;
+  font-family: Roboto, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -52,13 +52,9 @@ body {
 }
 
 .mark {
-  width: 18px;
+  display: block;
+  width: 22px;
   height: 22px;
-  border-radius: 2px;
-  background:
-    linear-gradient(var(--stamp), var(--stamp)) 0 0 / 100% 6px no-repeat,
-    var(--stamp-fg);
-  border: 1.5px solid var(--stamp);
 }
 
 .meta {
@@ -78,13 +74,15 @@ body {
 button {
   appearance: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: 3px;
   padding: 10px 16px;
   min-height: 44px;
   background: var(--stamp);
   color: var(--stamp-fg);
   font: inherit;
-  font-weight: 650;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -106,14 +104,13 @@ main {
   color: var(--muted);
 }
 
-img {
+#shot {
   display: block;
   max-width: min(920px, 100%);
   height: auto;
   margin: 0 auto;
   background: white;
   border: 1px solid var(--line);
-  box-shadow: 0 16px 40px rgba(28, 25, 21, 0.08);
 }
 
 .error {
@@ -122,7 +119,7 @@ img {
   padding: 24px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 3px;
 }
 
 .error h1 {

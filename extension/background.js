@@ -277,7 +277,7 @@ async function showProgress(tabId, n, total) {
       if (!el) {
         el = document.createElement("div");
         el.id = "wp-progress";
-        el.setAttribute("style", "position:fixed;z-index:2147483647;left:50%;bottom:16px;transform:translateX(-50%);background:#1F4D3A;color:#fff;font:600 14px/1.2 sans-serif;padding:8px 14px;border-radius:999px;pointer-events:none");
+        el.setAttribute("style", "position:fixed;z-index:2147483647;left:50%;bottom:16px;transform:translateX(-50%);background:#2449D8;color:#fff;font:700 13px/1.2 Roboto,Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;padding:8px 14px;border-radius:3px;pointer-events:none");
         document.documentElement.appendChild(el);
       }
       el.textContent = ${JSON.stringify(label)};
@@ -632,7 +632,7 @@ async function capture(tab) {
   if (busy.has(tab.id)) throw new Error(t("alreadyBusy"));
   busy.add(tab.id);
   startKeepAlive();
-  await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: "#1F4D3A" });
+  await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: "#2449D8" });
   await chrome.action.setBadgeText({ tabId: tab.id, text: "…" });
   let prepared = false;
   try {
