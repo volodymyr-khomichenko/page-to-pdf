@@ -18,6 +18,7 @@ export type LandingCopy = {
   title: string;
   subtitle: string;
   cta: string;
+  download: string;
   storeNote: string;
   installLabel: string;
   steps: { title: string; text: string }[];
@@ -36,12 +37,13 @@ export const englishCopy: LandingCopy = {
   subtitle:
     "Capture a logged-in dashboard or private page as PNG or PDF, then give the file to an AI.",
   cta: "Add to Chrome",
-  storeNote: "Version 1.0.10. Free on the Chrome Web Store.",
+  download: "Download page-to-pdf.zip",
+  storeNote: "Version 1.0.10. Chrome Web Store, or the zip while the listing is not up yet.",
   installLabel: "How to use",
   steps: [
     {
-      title: "Add to Chrome",
-      text: "Install Page to PDF from the Chrome Web Store. The icon appears in the toolbar.",
+      title: "Install it",
+      text: "Add it from the Chrome Web Store. Or download page-to-pdf.zip, unzip it, open chrome://extensions, turn on Developer mode, and choose the page-to-pdf folder.",
     },
     {
       title: "Open your page",
@@ -54,7 +56,7 @@ export const englishCopy: LandingCopy = {
   ],
   howTitle: "How to capture",
   how: [
-    "Add Page to PDF from the Chrome Web Store.",
+    "Install Page to PDF from the Chrome Web Store, or from the page-to-pdf.zip archive.",
     "Open a page you're already signed in to: analytics, an ad account, a CRM, an admin panel or an internal tool.",
     "Click the Page to PDF icon or press Alt+Shift+Y.",
     "Wait a moment. Chrome briefly shows that the page is being debugged, which is how the capture comes out in one piece, without seams.",
@@ -90,12 +92,13 @@ export const ukrainianCopy: LandingCopy = {
   subtitle:
     "Знімає сторінку, яку не витягнеш публічно: кабінет, аналітику, адмінку. PDF або PNG можна одразу дати в AI.",
   cta: "Додати в Chrome",
-  storeNote: "Версія 1.0.10. Безкоштовно в Chrome Web Store.",
+  download: "Скачати page-to-pdf.zip",
+  storeNote: "Версія 1.0.10. Chrome Web Store або архів, поки картки в магазині ще немає.",
   installLabel: "Як користуватися",
   steps: [
     {
-      title: "Додайте в Chrome",
-      text: "Поставте Page to PDF з Chrome Web Store. Іконка з’явиться на панелі.",
+      title: "Поставте розширення",
+      text: "Додайте з Chrome Web Store. Або скачайте page-to-pdf.zip, розпакуйте, відкрийте chrome://extensions, увімкніть режим розробника і виберіть папку page-to-pdf.",
     },
     {
       title: "Відкрийте свою сторінку",
@@ -108,7 +111,7 @@ export const ukrainianCopy: LandingCopy = {
   ],
   howTitle: "Як знімати",
   how: [
-    "Додайте Page to PDF з Chrome Web Store.",
+    "Поставте Page to PDF з Chrome Web Store або з архіву page-to-pdf.zip.",
     "Відкрийте сторінку, на яку ви вже увійшли: аналітику, рекламний кабінет, CRM, адмінку чи внутрішній інструмент.",
     "Натисніть іконку Page to PDF або Alt+Shift+Y.",
     "Зачекайте. Chrome на мить напише, що сторінку налагоджують — так знімок виходить цілісним, без швів.",
@@ -168,7 +171,7 @@ export function LandingPage({ copy }: { copy: LandingCopy }) {
               {copy.title}
             </h1>
             <p className="max-w-xl text-lg leading-relaxed text-muted">{copy.subtitle}</p>
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <a
                 href={CHROME_STORE_URL}
                 target="_blank"
@@ -177,7 +180,13 @@ export function LandingPage({ copy }: { copy: LandingCopy }) {
               >
                 {copy.cta}
               </a>
-              <p className="text-sm text-muted">{copy.storeNote}</p>
+              <a
+                href="/page-to-pdf.zip"
+                className="inline-flex min-h-12 items-center justify-center rounded-[3px] border border-stamp bg-white px-8 text-sm font-bold tracking-wide text-stamp uppercase no-underline"
+              >
+                {copy.download}
+              </a>
+              <p className="w-full text-sm text-muted">{copy.storeNote}</p>
             </div>
           </div>
           <div className="lg:col-span-2">

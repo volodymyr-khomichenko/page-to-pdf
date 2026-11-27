@@ -7,7 +7,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "u
 const pub = path.resolve("public");
 fs.mkdirSync(pub, { recursive: true });
 
-const unpacked = path.join(pub, "whole-page.zip");
+const unpacked = path.join(pub, "page-to-pdf.zip");
 const store = path.join(pub, `page-to-pdf-${manifest.version}-cws.zip`);
 const skipInStore = new Set(["README.txt"]);
 
@@ -34,7 +34,7 @@ for path in (unpacked, store):
 with zipfile.ZipFile(unpacked, "w", zipfile.ZIP_DEFLATED) as whole, zipfile.ZipFile(store, "w", zipfile.ZIP_DEFLATED) as cws:
     for rel in files:
         full = os.path.join(root, rel)
-        whole.write(full, "whole-page/" + rel.replace("\\\\", "/"))
+        whole.write(full, "page-to-pdf/" + rel.replace("\\\\", "/"))
         if rel.replace("\\\\", "/") not in skip:
             cws.write(full, rel.replace("\\\\", "/"))
 print(unpacked)
