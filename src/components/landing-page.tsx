@@ -2,7 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { FileImage, FileText, PanelTop } from "lucide-react";
 import type { ReactNode } from "react";
 
-/** Swap this for the listing URL once the item is published. */
+/** Flip this on only after the Chrome Web Store listing is actually published. */
+export const CHROME_STORE_LISTED = false;
+
+/** Swap this for the listing URL once CHROME_STORE_LISTED is true. */
 export const CHROME_STORE_URL =
   "https://chromewebstore.google.com/search/Page%20to%20PDF%20Full%20Page%20Screenshot";
 
@@ -19,6 +22,7 @@ export type LandingCopy = {
   subtitle: string;
   cta: string;
   download: string;
+  version: string;
   storeNote: string;
   installLabel: string;
   steps: { title: string; text: string }[];
@@ -37,7 +41,8 @@ export const englishCopy: LandingCopy = {
     "Capture a logged-in dashboard or private page as PNG or PDF, then give the file to an AI.",
   cta: "Add to Chrome",
   download: "Download page-to-pdf.zip",
-  storeNote: "Version 1.0.10. Chrome Web Store, or the zip while the listing is not up yet.",
+  version: "Version 1.0.11.",
+  storeNote: "Chrome Web Store, or the zip while the listing is not up yet.",
   installLabel: "How to use",
   steps: [
     {
@@ -72,8 +77,8 @@ export const englishCopy: LandingCopy = {
       text: "One long page as is, or split into A4 sheets. Lines at a page break can be cut.",
     },
     {
-      title: "Not for email or feeds",
-      text: "Inner scrolling areas like Gmail and feeds that load more as you scroll are captured only partly. Chrome system pages can't be captured.",
+      title: "Email and feeds",
+      text: "Inbox-style pages with an inner scroll are captured as one list. Feeds that keep loading more as you scroll stop at the height limit. Chrome system pages can't be captured.",
     },
   ],
   previewTitle: "Dashboard",
@@ -87,7 +92,8 @@ export const ukrainianCopy: LandingCopy = {
     "Знімає сторінку, яку не витягнеш публічно: кабінет, аналітику, адмінку. PDF або PNG можна одразу дати в AI.",
   cta: "Додати в Chrome",
   download: "Скачати page-to-pdf.zip",
-  storeNote: "Версія 1.0.10. Chrome Web Store або архів, поки картки в магазині ще немає.",
+  version: "Версія 1.0.11.",
+  storeNote: "Chrome Web Store або архів, поки картки в магазині ще немає.",
   installLabel: "Як користуватися",
   steps: [
     {
@@ -122,8 +128,8 @@ export const ukrainianCopy: LandingCopy = {
       text: "Одна довга сторінка як є, або нарізка на A4. Рядки на межі аркуша можуть розрізатися.",
     },
     {
-      title: "Не для пошти і стрічок",
-      text: "Внутрішній скрол, як у Gmail, і стрічки, що догружаються вниз, знімаються лише частково. Системні сторінки Chrome — ніяк.",
+      title: "Пошта і стрічки",
+      text: "Сторінки на кшталт пошти з внутрішнім скролом знімаються одним списком. Стрічки, що догружаються без кінця, обриваються на ліміті висоти. Системні сторінки Chrome — ніяк.",
     },
   ],
   previewTitle: "Кабінет",
@@ -161,21 +167,30 @@ export function LandingPage({ copy }: { copy: LandingCopy }) {
             </h1>
             <p className="max-w-xl text-lg leading-relaxed text-muted">{copy.subtitle}</p>
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <a
-                href={CHROME_STORE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-12 items-center justify-center rounded-[3px] bg-stamp px-8 text-sm font-bold tracking-wide text-white uppercase no-underline"
-              >
-                {copy.cta}
-              </a>
+              {CHROME_STORE_LISTED ? (
+                <a
+                  href={CHROME_STORE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-h-12 items-center justify-center rounded-[3px] bg-stamp px-8 text-sm font-bold tracking-wide text-white uppercase no-underline"
+                >
+                  {copy.cta}
+                </a>
+              ) : null}
               <a
                 href="/page-to-pdf.zip"
-                className="inline-flex min-h-12 items-center justify-center rounded-[3px] border border-stamp bg-white px-8 text-sm font-bold tracking-wide text-stamp uppercase no-underline"
+                className={
+                  CHROME_STORE_LISTED
+                    ? "inline-flex min-h-12 items-center justify-center rounded-[3px] border border-stamp bg-white px-8 text-sm font-bold tracking-wide text-stamp uppercase no-underline"
+                    : "inline-flex min-h-12 items-center justify-center rounded-[3px] bg-stamp px-8 text-sm font-bold tracking-wide text-white uppercase no-underline"
+                }
               >
                 {copy.download}
               </a>
-              <p className="w-full text-sm text-muted">{copy.storeNote}</p>
+              <p className="w-full text-sm text-muted">
+                {copy.version}
+                {CHROME_STORE_LISTED ? ` ${copy.storeNote}` : ""}
+              </p>
             </div>
           </div>
           <div className="lg:col-span-2">

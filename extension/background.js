@@ -1,5 +1,5 @@
 import { framesNeedWait, hideOverlays, preparePage, restorePage } from "./page-fns.js";
-import { chooseScrollMode, nextInnerStrip, viewportArea } from "./scroll-plan.js";
+import { chooseScrollMode, contentBox, nextInnerStrip, sidebarColumns, viewportArea } from "./scroll-plan.js";
 import { putShot } from "./idb.js";
 
 const busy = new Set();
@@ -324,15 +324,13 @@ async function cropSlice(bytes, cssTop, cssHeight, cssViewport) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-async function cropRect(bytes, box) {
+async function cropDevicePixels(bytes, rect) {
   const size = pngSize(bytes);
   if (!size) return bytes;
-  const scaleX = size.width / Math.max(1, box.cssViewportWidth);
-  const scaleY = size.height / Math.max(1, box.cssViewportHeight);
-  const x = Math.max(0, Math.min(size.width - 1, Math.round(box.cssLeft * scaleX)));
-  const y = Math.max(0, Math.min(size.height - 1, Math.round(box.cssTop * scaleY)));
-  const width = Math.max(1, Math.min(size.width - x, Math.round(box.cssWidth * scaleX)));
-  const height = Math.max(1, Math.min(size.height - y, Math.round(box.cssHeight * scaleY)));
+  const x = Math.max(0, Math.min(size.width - 1, rect.x));
+  const y = Math.max(0, Math.min(size.height - 1, rect.y));
+  const width = Math.max(1, Math.min(size.width - x, rect.width));
+  const height = Math.max(1, Math.min(size.height - y, rect.height));
   const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
   const canvas = new OffscreenCanvas(width, height);
   canvas.getContext("2d").drawImage(bitmap, x, y, width, height, 0, 0, width, height);
@@ -367,9 +365,31 @@ async function composeInner(tiles, cssWidth) {
   let y = bitmaps[0].height;
   for (let i = 1; i < bitmaps.length; i += 1) {
     const bitmap = bitmaps[i];
-    draw(bitmap, (tiles[i].x || 0) * scale, y, bitmap.width, bitmap.height);
+    const column = tiles[i].pixelX == null ? Math.round((tiles[i].x || 0) * scale) : tiles[i].pixelX;
+    draw(bitmap, column, y, bitmap.width, bitmap.height);
     y += bitmap.height;
     bitmap.close();
+  }
+  if (bitmaps.length > 1) {
+    const column = tiles[1].pixelX == null ? Math.round((tiles[1].x || 0) * scale) : tiles[1].pixelX;
+    const sides = sidebarColumns(bitmaps[0].width, column, bitmaps[1].width);
+    const fromY = Math.round(bitmaps[0].height * outScale);
+    const stretch = (side) => {
+      if (!side || height <= fromY) return;
+      ctx.drawImage(
+        bitmaps[0],
+        side.x,
+        bitmaps[0].height - 1,
+        side.width,
+        1,
+        Math.round(side.x * outScale),
+        fromY,
+        Math.max(1, Math.round(side.width * outScale)),
+        height - fromY,
+      );
+    };
+    stretch(sides.left);
+    stretch(sides.right);
   }
   bitmaps[0].close();
   const blob = await canvas.convertToBlob({ type: "image/png" });
@@ -387,7 +407,11 @@ async function readScroller(tabId) {
       left: rect.left,
       width: rect.width,
       height: rect.height,
+      clientLeft: el.clientLeft,
+      clientTop: el.clientTop,
+      clientWidth: el.clientWidth,
       clientHeight: el.clientHeight,
+      offsetWidth: el.offsetWidth,
       scrollHeight: el.scrollHeight,
       scrollTop: el.scrollTop || 0,
     };
@@ -399,36 +423,49 @@ async function captureInner(tabId, info) {
   const tiles = [];
   const hidden = [];
   const viewport = Math.max(1, info.viewportHeight || 800);
-  let box = info.scrollerBox;
-  let clientHeight = Math.max(1, box.clientHeight || box.height);
-  let covered = clientHeight;
-  let scrollTop = 0;
+  let raw = info.scrollerBox;
+  let box = contentBox({
+    left: raw.left,
+    top: raw.top,
+    clientLeft: raw.clientLeft,
+    clientTop: raw.clientTop,
+    clientWidth: raw.clientWidth || raw.width,
+    clientHeight: raw.clientHeight || raw.height,
+    offsetWidth: raw.offsetWidth || raw.width,
+  });
+  let clientHeight = Math.max(1, box.height);
+  let previousScrollTop = 0;
   let truncated = false;
-  const estimated = Math.max(1, Math.ceil(Math.min(box.scrollHeight, CAP) / clientHeight));
+  const estimated = Math.max(1, Math.ceil(Math.min(raw.scrollHeight, CAP) / clientHeight));
 
   await showProgress(tabId, 1, estimated);
   await settleScroll(tabId, 0);
   const opened = await readScroller(tabId);
   if (opened) {
-    box = opened;
-    clientHeight = Math.max(1, opened.clientHeight || clientHeight);
-    covered = clientHeight;
+    raw = opened;
+    box = contentBox(opened);
+    clientHeight = Math.max(1, box.height);
   }
   hidden.push(0);
   await waitForSlice(tabId);
   await clearProgress(tabId);
-  tiles.push({ bytes: await grabViewport(tabId), full: true });
+  const first = await grabViewport(tabId);
+  const firstSize = pngSize(first);
+  const scaleX = firstSize ? firstSize.width / Math.max(1, info.cssWidth) : info.dpr || 1;
+  const scaleY = firstSize ? firstSize.height / viewport : info.dpr || 1;
+  tiles.push({ bytes: first, full: true });
 
   let guard = 0;
   while (guard < 80) {
     guard += 1;
-    const live = (await readScroller(tabId)) || box;
-    box = live;
-    clientHeight = Math.max(1, live.clientHeight || clientHeight);
+    const live = (await readScroller(tabId)) || raw;
+    raw = live;
+    box = contentBox(live);
+    clientHeight = Math.max(1, box.height);
     const maxScroll = Math.max(0, live.scrollHeight - clientHeight);
-    const target = Math.min(maxScroll, scrollTop + clientHeight);
-    if (target <= scrollTop + 0.5) break;
-    const outputCss = viewport + Math.max(0, covered - clientHeight);
+    const target = Math.min(maxScroll, previousScrollTop + clientHeight);
+    if (target <= previousScrollTop + 0.5) break;
+    const outputCss = viewport + Math.max(0, previousScrollTop);
     if (outputCss >= CAP) {
       truncated = true;
       break;
@@ -439,26 +476,35 @@ async function captureInner(tabId, info) {
       clientHeight,
       scrollHeight: live.scrollHeight,
       scrollTop: pos.scrollTop,
-      covered,
+      previousScrollTop,
+      dpr: scaleY,
     });
     await waitForSlice(tabId);
     await clearProgress(tabId);
     if (!strip) break;
+    let cropTop = strip.cropTop;
+    let stripHeight = strip.height;
+    if (cropTop < 0) {
+      stripHeight += cropTop;
+      cropTop = 0;
+    }
+    if (stripHeight <= 0) break;
     const frame = await grabViewport(tabId);
+    const x0 = Math.round(box.left * scaleX);
+    const x1 = Math.round((box.left + box.width) * scaleX);
+    const y0 = Math.round(box.top * scaleY) + cropTop;
     tiles.push({
-      bytes: await cropRect(frame, {
-        cssLeft: live.left,
-        cssTop: live.top + strip.cropTop,
-        cssWidth: live.width,
-        cssHeight: strip.height,
-        cssViewportWidth: info.cssWidth,
-        cssViewportHeight: viewport,
+      bytes: await cropDevicePixels(frame, {
+        x: x0,
+        y: y0,
+        width: Math.max(1, x1 - x0),
+        height: stripHeight,
       }),
-      x: live.left,
+      x: box.left,
+      pixelX: x0,
     });
     hidden.push(0);
-    covered = strip.covered;
-    scrollTop = pos.scrollTop;
+    previousScrollTop = pos.scrollTop;
     if (pos.scrollTop >= maxScroll - 1) break;
   }
   await clearProgress(tabId);

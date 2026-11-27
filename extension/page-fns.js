@@ -84,7 +84,9 @@ export async function preparePage() {
     const style = document.createElement("style");
     style.id = "wp-hide-style";
     style.textContent =
-      "html::-webkit-scrollbar,body::-webkit-scrollbar{width:0 !important;height:0 !important}";
+      "html::-webkit-scrollbar,body::-webkit-scrollbar{width:0 !important;height:0 !important}" +
+      "[data-wp-scroller]{scrollbar-width:none !important}" +
+      "[data-wp-scroller]::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important}";
     document.documentElement.appendChild(style);
   }
 
@@ -160,7 +162,11 @@ export async function preparePage() {
       left: rect.left,
       width: rect.width,
       height: rect.height,
+      clientLeft: scroller.el.clientLeft,
+      clientTop: scroller.el.clientTop,
+      clientWidth: scroller.el.clientWidth,
       clientHeight: scroller.el.clientHeight,
+      offsetWidth: scroller.el.offsetWidth,
       scrollHeight: scroller.el.scrollHeight,
     };
   }

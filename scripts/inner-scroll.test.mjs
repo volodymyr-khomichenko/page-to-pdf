@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseScrollMode, nextInnerStrip } from "../extension/scroll-plan.js";
+import { chooseScrollMode, contentBox, nextInnerStrip, sidebarColumns } from "../extension/scroll-plan.js";
 
 test("a normal scrolling page stays on the document", () => {
   const mode = chooseScrollMode({
@@ -87,4 +87,55 @@ test("the last inner step adds only the new pixels", () => {
   assert.equal(last.cropTop, 300);
   assert.equal(last.height, 200);
   assert.equal(last.covered, 1200);
+});
+
+test("fractional scrollTop strips abut at dpr 1, 1.25 and 2", () => {
+  const clientHeight = 480.5;
+  const stops = [360.4, 720.8, 1000.2];
+  for (const dpr of [1, 1.25, 2]) {
+    let previous = 0;
+    let end = Math.round(clientHeight * dpr);
+    for (const scrollTop of stops) {
+      const strip = nextInnerStrip({
+        clientHeight,
+        scrollHeight: 4000,
+        scrollTop,
+        previousScrollTop: previous,
+        dpr,
+      });
+      assert.equal(strip.pixelStart, end);
+      assert.equal(strip.pixelEnd, Math.round((scrollTop + clientHeight) * dpr));
+      assert.equal(strip.height, strip.pixelEnd - strip.pixelStart);
+      assert.equal(strip.cropTop, strip.pixelStart - Math.round(scrollTop * dpr));
+      assert.ok(strip.height > 0);
+      end = strip.pixelEnd;
+      previous = scrollTop;
+    }
+  }
+});
+
+test("the content box excludes the scrollbar and the borders", () => {
+  const box = contentBox({
+    left: 240,
+    top: 64,
+    clientLeft: 1,
+    clientTop: 2,
+    clientWidth: 800,
+    clientHeight: 700,
+    offsetWidth: 817,
+  });
+  assert.equal(box.left, 241);
+  assert.equal(box.top, 66);
+  assert.equal(box.width, 800);
+  assert.equal(box.height, 700);
+  assert.equal(box.scrollbar, 17);
+});
+
+test("the sidebar column continues beside the scroller", () => {
+  const sides = sidebarColumns(1440, 220, 1040);
+  assert.deepEqual(sides.left, { x: 0, width: 220 });
+  assert.deepEqual(sides.right, { x: 1260, width: 180 });
+  const flush = sidebarColumns(1000, 0, 1000);
+  assert.equal(flush.left, null);
+  assert.equal(flush.right, null);
 });
