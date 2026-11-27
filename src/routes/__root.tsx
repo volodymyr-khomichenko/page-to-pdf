@@ -1,4 +1,4 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
@@ -8,18 +8,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Page to PDF — Full Page Screenshot" },
-      {
-        name: "description",
-        content: "Розширення для Chrome: знімає залогінену сторінку — кабінет, аналітику, адмінку — і зберігає PNG або PDF для AI.",
-      },
       { name: "theme-color", content: "#1f4d3a" },
-      { property: "og:title", content: "Page to PDF — Full Page Screenshot" },
-      {
-        property: "og:description",
-        content: "Розширення для Chrome: знімає залогінену сторінку — кабінет, аналітику, адмінку — і зберігає PNG або PDF для AI.",
-      },
-      { property: "og:url", content: "https://page-to-pdf-screenshot.vercel.app/" },
       { property: "og:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: "https://page-to-pdf-screenshot.vercel.app/og.png" },
@@ -42,8 +31,14 @@ export const Route = createRootRoute({
       },
     ],
   }),
-  component: () => (
-    <html lang="uk" suppressHydrationWarning>
+  component: RootDocument,
+});
+
+function RootDocument() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const lang = pathname === "/uk" || pathname.startsWith("/uk/") ? "uk" : "en";
+  return (
+    <html lang={lang} suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -55,5 +50,5 @@ export const Route = createRootRoute({
         <Scripts />
       </body>
     </html>
-  ),
-});
+  );
+}
