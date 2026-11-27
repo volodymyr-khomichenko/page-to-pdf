@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseScrollMode, contentBox, innerScrollTarget, matchBandOffset, nextInnerStrip, sidebarColumns } from "../extension/scroll-plan.js";
+import { captureOverlap, chooseScrollMode, contentBox, innerScrollTarget, matchBandOffset, nextInnerStrip, seamBandCss, sidebarColumns } from "../extension/scroll-plan.js";
 
 test("a normal scrolling page stays on the document", () => {
   const mode = chooseScrollMode({
@@ -188,6 +188,52 @@ test("pixel match finds a shifted join and rejects a flat band", () => {
   });
   assert.equal(tied.matched, true);
   assert.equal(tied.top, 20);
+});
+
+test("capture keeps about half a screen of overlap", () => {
+  assert.equal(captureOverlap(800), 440);
+  assert.equal(seamBandCss(440), 300);
+  assert.equal(captureOverlap(200), 110);
+  const step = innerScrollTarget(0, 800, 5000, captureOverlap(800));
+  assert.equal(step, 360);
+});
+
+test("a tight window stays on the predicted row instead of a similar one", () => {
+  const width = 24;
+  const row = 40;
+  const frameHeight = row * 6;
+  const frame = new Uint8Array(width * frameHeight);
+  for (let y = 0; y < frameHeight; y += 1) {
+    const n = Math.floor(y / row);
+    for (let x = 0; x < width; x += 1) frame[y * width + x] = 40 + n * 30 + (y % row === 4 ? 7 : 0);
+  }
+  const trueTop = row;
+  const bandHeight = 80;
+  const shifted = matchBandOffset({
+    band: frame.subarray(trueTop * width, (trueTop + bandHeight) * width),
+    bandWidth: width,
+    bandHeight,
+    frame,
+    frameWidth: width,
+    frameHeight,
+    expectedTop: trueTop + row,
+    windowPx: 16,
+    threshold: 12,
+  });
+  assert.equal(shifted.matched, false);
+  const exact = matchBandOffset({
+    band: frame.subarray(trueTop * width, (trueTop + bandHeight) * width),
+    bandWidth: width,
+    bandHeight,
+    frame,
+    frameWidth: width,
+    frameHeight,
+    expectedTop: trueTop + 3,
+    windowPx: 16,
+    threshold: 12,
+  });
+  assert.equal(exact.matched, true);
+  assert.equal(exact.top, trueTop);
 });
 
 test("the sidebar column continues beside the scroller", () => {

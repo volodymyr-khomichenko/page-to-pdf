@@ -5,6 +5,7 @@ import test from "node:test";
 import puppeteer from "puppeteer-core";
 
 const html = fs.readFileSync(new URL("../tests/fixtures/inbox.html", import.meta.url), "utf8");
+const groupsHtml = fs.readFileSync(new URL("../tests/fixtures/groups.html", import.meta.url), "utf8");
 const ext = new URL("../extension", import.meta.url).pathname;
 
 function swatchColor(n) {
@@ -42,10 +43,10 @@ async function resolveChrome() {
   return null;
 }
 
-async function captureInbox(height, dpr, executablePath) {
+async function captureInbox(height, dpr, executablePath, pageHtml = html) {
   const server = http.createServer((_req, res) => {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    res.end(html);
+    res.end(pageHtml);
   });
   let browser;
   try {
@@ -101,17 +102,22 @@ async function captureInbox(height, dpr, executablePath) {
       scroller: document.getElementById("list").clientHeight,
       rows: document.getElementById("list").children.length,
     }));
-    assert.equal(metrics.rows, 60);
-    assert.ok(Math.abs(metrics.dpr - dpr) < 0.02, `dpr ${metrics.dpr} != ${dpr}`);
-    assert.equal(metrics.height, height);
-    assert.notEqual(metrics.scroller % 44, 0, `scroller ${metrics.scroller} is a multiple of the row`);
+    if (pageHtml === html) {
+      assert.equal(metrics.rows, 60);
+      assert.ok(Math.abs(metrics.dpr - dpr) < 0.02, `dpr ${metrics.dpr} != ${dpr}`);
+      assert.equal(metrics.height, height);
+      assert.notEqual(metrics.scroller % 44, 0, `scroller ${metrics.scroller} is a multiple of the row`);
+    } else {
+      assert.equal(metrics.rows, 36);
+      assert.equal(metrics.height, height);
+    }
     const captured = await worker.evaluate(async () => {
       const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
       return globalThis.__capture(tabs[0]);
     });
     assert.equal(captured.capture.path, "inner-scroll");
     const pixels = await worker.evaluate(
-      async ({ id, cssWidth }) => {
+      async ({ id, cssWidth, sampleCssX }) => {
         const db = await new Promise((resolve, reject) => {
           const request = indexedDB.open("wholepage", 1);
           request.onsuccess = () => resolve(request.result);
@@ -129,7 +135,7 @@ async function captureInbox(height, dpr, executablePath) {
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
         ctx.drawImage(bitmap, 0, 0);
         const scale = bitmap.width / cssWidth;
-        const x = Math.round(262 * scale);
+        const x = Math.round((sampleCssX || 262) * scale);
         const samples = [];
         for (let y = Math.round(65 * scale); y < bitmap.height; y += 1) {
           const pixel = ctx.getImageData(Math.max(0, x - 1), y, 3, 1).data;
@@ -140,8 +146,49 @@ async function captureInbox(height, dpr, executablePath) {
         bitmap.close();
         return { ...size, scale, samples, side };
       },
-      { id: captured.id, cssWidth: metrics.width },
+      { id: captured.id, cssWidth: metrics.width, sampleCssX: pageHtml === html ? 262 : 720 },
     );
+    if (pageHtml !== html) {
+      const headers = [
+        [16, 120, 92],
+        [36, 73, 216],
+        [176, 38, 92],
+        [120, 53, 15],
+      ];
+      const runs = headers.map(() => []);
+      let current = -1;
+      let length = 0;
+      const closeRun = () => {
+        if (current >= 0) runs[current].push(length);
+        current = -1;
+        length = 0;
+      };
+      for (const sample of pixels.samples) {
+        let hit = -1;
+        for (let n = 0; n < headers.length; n += 1) {
+          const [r, g, b] = headers[n];
+          const distance = Math.abs(sample[0] - r) + Math.abs(sample[1] - g) + Math.abs(sample[2] - b);
+          if (distance <= 36) {
+            hit = n;
+            break;
+          }
+        }
+        if (hit === current && hit >= 0) length += 1;
+        else {
+          closeRun();
+          if (hit >= 0) {
+            current = hit;
+            length = 1;
+          }
+        }
+      }
+      closeRun();
+      headers.forEach((_, index) => {
+        assert.deepEqual(runs[index].length, 1, `header ${index} runs ${runs[index].join(",")}`);
+        assert.ok(runs[index][0] >= 32 && runs[index][0] <= 40, `header ${index} height ${runs[index][0]}`);
+      });
+      return { height: pixels.height, cssHeight: Math.round(pixels.height / pixels.scale), slices: captured.capture.slices };
+    }
     const seen = [];
     let last = -1;
     for (const sample of pixels.samples) {
@@ -192,4 +239,17 @@ test("each inbox row appears once at 1200, 1080 and 900, DPR 1 and 1.25", { time
     }
   }
   assert.equal(results.length, 6);
+});
+
+test("sticky group headers stay whole, including META TAGS", { timeout: 90000 }, async (t) => {
+  const executablePath = await resolveChrome();
+  if (!executablePath) {
+    t.skip(
+      "No Chrome or Chromium found. Set CHROME_PATH, or install Google Chrome (/usr/bin/google-chrome) or Chromium (/usr/bin/chromium).",
+    );
+    return;
+  }
+  const result = await captureInbox(900, 1, executablePath, groupsHtml);
+  console.log(`groups 900 dpr 1: png ${result.height}px css ${result.cssHeight} slices ${result.slices}`);
+  assert.ok(result.slices >= 2, `expected more than one slice, got ${result.slices}`);
 });

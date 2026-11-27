@@ -69,6 +69,21 @@ export async function preparePage() {
   if (scroller.mode === "inner") {
     scroller.el.setAttribute("data-wp-scroller", scroller.name);
     scroller.el.setAttribute("data-wp-saved-scroll", String(scroller.el.scrollTop || 0));
+    const sticky = [];
+    const walkSticky = (node) => {
+      if (!node?.querySelectorAll) return;
+      sticky.push(node);
+      for (const el of node.querySelectorAll("*")) {
+        sticky.push(el);
+        if (el.shadowRoot) walkSticky(el.shadowRoot);
+      }
+    };
+    walkSticky(scroller.el);
+    for (const el of sticky) {
+      if (getComputedStyle(el).position !== "sticky") continue;
+      el.setAttribute("data-wp-sticky", el.style.position || "");
+      el.style.setProperty("position", "static", "important");
+    }
   }
   const root = scroller.el;
   if (!document.documentElement.dataset.wpScroll) {
@@ -253,6 +268,7 @@ export async function hideOverlays() {
 
   function mark(el, hard) {
     if (!el || el === document.body || el === document.documentElement) return false;
+    if (el.id === "wp-progress" || el.closest?.("#wp-progress")) return false;
     if (!el.hasAttribute("data-wp-style")) {
       const cs = getComputedStyle(el);
       if (cs.display === "none" || cs.visibility === "hidden") return false;
@@ -431,6 +447,12 @@ export function restorePage() {
   restoreTree(document);
   document.getElementById("wp-hide-style")?.remove();
   document.getElementById("wp-progress")?.remove();
+  for (const el of document.querySelectorAll("[data-wp-sticky]")) {
+    const previous = el.getAttribute("data-wp-sticky") || "";
+    el.style.removeProperty("position");
+    if (previous) el.style.position = previous;
+    el.removeAttribute("data-wp-sticky");
+  }
   for (const el of document.querySelectorAll("[data-wp-saved-scroll]")) {
     el.scrollTop = Number(el.getAttribute("data-wp-saved-scroll") || 0);
     el.removeAttribute("data-wp-saved-scroll");

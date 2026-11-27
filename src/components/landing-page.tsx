@@ -41,7 +41,7 @@ export const englishCopy: LandingCopy = {
     "Capture a logged-in dashboard or private page as PNG or PDF, then give the file to an AI.",
   cta: "Add to Chrome",
   download: "Download page-to-pdf.zip",
-  version: "Version 1.0.15.",
+  version: "Version 1.0.16.",
   storeNote: "Chrome Web Store, or the zip while the listing is not up yet.",
   installLabel: "How to use",
   steps: [
@@ -92,7 +92,7 @@ export const ukrainianCopy: LandingCopy = {
     "Знімає сторінку, яку не витягнеш публічно: кабінет, аналітику, адмінку. PDF або PNG можна одразу дати в AI.",
   cta: "Додати в Chrome",
   download: "Скачати page-to-pdf.zip",
-  version: "Версія 1.0.15.",
+  version: "Версія 1.0.16.",
   storeNote: "Chrome Web Store або архів, поки картки в магазині ще немає.",
   installLabel: "Як користуватися",
   steps: [

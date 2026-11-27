@@ -97,11 +97,26 @@ export function sidebarColumns(width, scrollerX, scrollerWidth) {
   };
 }
 
-/** CSS pixels of overlap kept between inner-scroll screens so the join can be matched. */
+/** CSS pixels of overlap kept between screens so the join can be matched. */
 export const INNER_OVERLAP = 120;
 export const INNER_BAND_MARGIN = 20;
 export const MATCH_WINDOW = 60;
 export const MATCH_THRESHOLD = 24;
+
+/**
+ * Overlap for a real capture. Half the view, so the same rows are still on
+ * screen for a tall match. Smaller than the view by at least 80px.
+ */
+export function captureOverlap(clientHeight) {
+  const height = Math.max(1, Math.round(clientHeight));
+  const cap = Math.max(40, height - 80);
+  return Math.max(40, Math.min(Math.round(height * 0.55), cap));
+}
+
+/** Band matched inside that overlap, kept clear of a sticky header at the top. */
+export function seamBandCss(overlap) {
+  return Math.max(48, Math.min(300, overlap - 96));
+}
 
 /** Next scroll position: one view minus the overlap, never past the end. */
 export function innerScrollTarget(previousScrollTop, clientHeight, maxScroll, overlap = INNER_OVERLAP) {

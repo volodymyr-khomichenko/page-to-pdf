@@ -1,5 +1,5 @@
 import { framesNeedWait, hideOverlays, preparePage, restorePage } from "./page-fns.js";
-import { chooseScrollMode, contentBox, INNER_BAND_MARGIN, INNER_OVERLAP, innerScrollTarget, MATCH_THRESHOLD, MATCH_WINDOW, matchBandOffset, nextInnerStrip, sidebarColumns, viewportArea } from "./scroll-plan.js";
+import { chooseScrollMode, contentBox, captureOverlap, seamBandCss, innerScrollTarget, matchBandOffset, nextInnerStrip, sidebarColumns, viewportArea } from "./scroll-plan.js";
 import { putShot } from "./idb.js";
 
 const busy = new Set();
@@ -272,6 +272,7 @@ async function settleScroll(tabId, target) {
 
 async function showProgress(tabId, n, total) {
   const label = t("capturing", [String(n), String(total)]);
+  const ratio = Math.max(0.06, Math.min(1, n / Math.max(1, total)));
   await chrome.action.setTitle({ tabId, title: label });
   await chrome.action.setBadgeText({ tabId, text: `${n}/${total}`.slice(0, 4) });
   await send(tabId, "Runtime.evaluate", {
@@ -280,11 +281,28 @@ async function showProgress(tabId, n, total) {
       if (!el) {
         el = document.createElement("div");
         el.id = "wp-progress";
-        el.setAttribute("style", "position:fixed;z-index:2147483647;left:50%;top:16px;transform:translateX(-50%);background:#2449D8;color:#fff;font:700 13px/1.2 Roboto,Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;padding:8px 14px;border-radius:3px;pointer-events:none");
+        el.setAttribute("style", "position:fixed;z-index:2147483647;left:0;right:0;bottom:0;height:36px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#ffffff;border-top:1px solid #DCE1EA;pointer-events:none;font:600 12px/1 Roboto,Arial,sans-serif;color:#111827");
+        el.innerHTML = '<span id="wp-progress-label" style="white-space:nowrap"></span><span style="flex:1;height:10px;background:#DCE1EA;border-radius:3px;overflow:hidden"><span id="wp-progress-fill" style="display:block;height:100%;width:0;background:#2449D8;transition:width .6s linear"></span></span>';
         document.documentElement.appendChild(el);
       }
-      el.textContent = ${JSON.stringify(label)};
+      const labelEl = el.querySelector("#wp-progress-label");
+      const fill = el.querySelector("#wp-progress-fill");
+      if (labelEl) labelEl.textContent = ${JSON.stringify(label)};
+      if (fill) fill.style.width = "${Math.round(ratio * 100)}%";
+      el.style.visibility = "visible";
     })()`,
+    returnByValue: true,
+  });
+}
+
+async function concealProgress(tabId) {
+  await send(tabId, "Runtime.evaluate", {
+    expression: `(() => {
+      const el = document.getElementById("wp-progress");
+      if (el) el.style.visibility = "hidden";
+      return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 40))));
+    })()`,
+    awaitPromise: true,
     returnByValue: true,
   });
 }
@@ -343,7 +361,9 @@ async function cropDevicePixels(bytes, rect) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-const SEAM_BLEND = 8;
+const SEAM_BLEND = 0;
+const SEAM_WINDOW = 16;
+const SEAM_THRESHOLD = 12;
 
 async function fadeBytes(prevBytes, frameBytes, cut, blend) {
   const prev = await createImageBitmap(new Blob([prevBytes], { type: "image/png" }));
@@ -382,7 +402,7 @@ async function fadeBytes(prevBytes, frameBytes, cut, blend) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-async function joinFrame(previousBytes, frameBytes, expectedCss, viewportCss) {
+async function joinFrame(previousBytes, frameBytes, expectedCss, viewportCss, overlapCss) {
   const view = await imageGray(frameBytes);
   const scale = view.height / Math.max(1, viewportCss);
   const expectedCut = Math.round(Math.max(0, expectedCss) * scale);
@@ -391,7 +411,7 @@ async function joinFrame(previousBytes, frameBytes, expectedCss, viewportCss) {
     const previous = await imageGray(previousBytes);
     const bandH = Math.min(
       previous.height - 1,
-      Math.max(8, Math.round((INNER_OVERLAP - INNER_BAND_MARGIN) * scale)),
+      Math.max(8, Math.round(seamBandCss(overlapCss || expectedCss) * scale)),
     );
     if (bandH >= 8 && expectedCut > bandH && bandH < view.height && previous.width === view.width) {
       const band = previous.gray.subarray((previous.height - bandH) * previous.width);
@@ -403,6 +423,8 @@ async function joinFrame(previousBytes, frameBytes, expectedCss, viewportCss) {
         frameWidth: view.width,
         frameHeight: view.height,
         expectedTop: expectedCut - bandH,
+        windowPx: SEAM_WINDOW,
+        threshold: SEAM_THRESHOLD,
       });
       if (match.matched) cut = match.cut;
     }
@@ -590,9 +612,10 @@ async function captureInner(tabId, info) {
   let clientHeight = Math.max(1, box.height);
   let previousScrollTop = 0;
   let truncated = false;
+  const overlap = captureOverlap(clientHeight);
   const estimated = Math.max(
     1,
-    Math.ceil(Math.min(raw.scrollHeight, CAP) / Math.max(1, clientHeight - INNER_OVERLAP)),
+    Math.ceil(Math.min(raw.scrollHeight, CAP) / Math.max(1, clientHeight - overlap)),
   );
 
   await showProgress(tabId, 1, estimated);
@@ -605,7 +628,8 @@ async function captureInner(tabId, info) {
   }
   hidden.push(0);
   await waitForSlice(tabId);
-  await clearProgress(tabId);
+  await sleep(160);
+  await concealProgress(tabId);
   const first = await grabViewport(tabId);
   const firstSize = pngSize(first);
   const scaleX = firstSize ? firstSize.width / Math.max(1, info.cssWidth) : info.dpr || 1;
@@ -626,7 +650,8 @@ async function captureInner(tabId, info) {
     box = contentBox(live);
     clientHeight = Math.max(1, box.height);
     const maxScroll = Math.max(0, live.scrollHeight - clientHeight);
-    const target = innerScrollTarget(previousScrollTop, clientHeight, maxScroll);
+    const overlap = captureOverlap(clientHeight);
+    const target = innerScrollTarget(previousScrollTop, clientHeight, maxScroll, overlap);
     if (target == null) break;
     const outputCss = viewport + Math.max(0, previousScrollTop);
     if (outputCss >= CAP) {
@@ -636,7 +661,8 @@ async function captureInner(tabId, info) {
     await showProgress(tabId, tiles.length + 1, estimated);
     await settleScroll(tabId, target);
     await waitForSlice(tabId);
-    await clearProgress(tabId);
+    await sleep(160);
+    await concealProgress(tabId);
     const fresh = await readScroller(tabId);
     if (fresh) {
       raw = fresh;
@@ -648,7 +674,7 @@ async function captureInner(tabId, info) {
     const rect = deviceBox(box, scaleX, scaleY);
     const viewBytes = await cropDevicePixels(frame, rect);
     const view = await imageGray(viewBytes);
-    const bandH = Math.round((INNER_OVERLAP - INNER_BAND_MARGIN) * scaleY);
+    const bandH = Math.round(seamBandCss(overlap) * scaleY);
     const expectedCut = Math.round((previousScrollTop + clientHeight - scrollTop) * scaleY);
     const fallbackStrip = nextInnerStrip({
       clientHeight,
@@ -668,8 +694,8 @@ async function captureInner(tabId, info) {
         frameWidth: view.width,
         frameHeight: view.height,
         expectedTop: expectedCut - bandH,
-        windowPx: MATCH_WINDOW,
-        threshold: MATCH_THRESHOLD,
+        windowPx: SEAM_WINDOW,
+        threshold: SEAM_THRESHOLD,
       });
       if (match.matched) cut = match.cut;
     }
@@ -763,15 +789,16 @@ async function hideForSlice(tabId) {
 async function captureSurface(tabId, info) {
   const cssHeight = Math.max(1, Math.round(info.cssHeight));
   const viewport = Math.max(1, info.viewportHeight || 800);
+  const overlap = captureOverlap(viewport);
   const tiles = [];
   const hidden = [];
   let committed = 0;
   let previousBytes = null;
   let guard = 0;
-  const total = Math.max(1, Math.ceil(cssHeight / Math.max(1, viewport - INNER_OVERLAP)));
+  const total = Math.max(1, Math.ceil(cssHeight / Math.max(1, viewport - overlap)));
   while (committed < cssHeight - 1 && guard < 80) {
     guard += 1;
-    const target = committed === 0 ? 0 : Math.max(0, committed - INNER_OVERLAP);
+    const target = committed === 0 ? 0 : Math.max(0, committed - overlap);
     await showProgress(tabId, tiles.length + 1, total);
     const pos = await settleScroll(tabId, target);
     if (committed > 0) {
@@ -783,7 +810,8 @@ async function captureSurface(tabId, info) {
     await waitForSlice(tabId);
     const docEnd = Math.min(cssHeight, pos.y + pos.viewport);
     if (committed > 0 && docEnd <= committed + 1) break;
-    await clearProgress(tabId);
+    await sleep(160);
+    await concealProgress(tabId);
     const tile = await grabViewport(tabId);
     if (surfaceTooTall(tile, pos.viewport)) {
       console.info("[page-to-pdf] surface taller than the viewport, using scroll-stitch");
@@ -797,7 +825,7 @@ async function captureSurface(tabId, info) {
       committed = pos.y + keep;
       continue;
     }
-    const joined = await joinFrame(previousBytes, tile, committed - pos.y, pos.viewport);
+    const joined = await joinFrame(previousBytes, tile, committed - pos.y, pos.viewport, overlap);
     if (joined.height < 2) break;
     tiles[tiles.length - 1] = joined.prevOut;
     tiles.push(joined.rows);
@@ -811,16 +839,17 @@ async function captureSurface(tabId, info) {
 }
 
 async function scrollStitch(tab, cssHeight, info) {
+  const viewportGuess = Math.max(1, info?.viewportHeight || 800);
+  const overlap = captureOverlap(viewportGuess);
   const slices = [];
   const hidden = [];
   let committed = 0;
   let previousBytes = null;
   let guard = 0;
-  const viewportGuess = Math.max(1, info?.viewportHeight || 800);
-  const total = Math.max(1, Math.ceil(cssHeight / Math.max(1, viewportGuess - INNER_OVERLAP)));
+  const total = Math.max(1, Math.ceil(cssHeight / Math.max(1, viewportGuess - overlap)));
   while (committed < cssHeight - 1 && guard < 80) {
     guard += 1;
-    const target = committed === 0 ? 0 : Math.max(0, committed - INNER_OVERLAP);
+    const target = committed === 0 ? 0 : Math.max(0, committed - overlap);
     await attach(tab.id);
     let pos;
     try {
@@ -838,13 +867,13 @@ async function scrollStitch(tab, cssHeight, info) {
         viewport: settled.viewport,
         height: Math.min(cssHeight, settled.maxScroll + settled.viewport),
       };
-      await clearProgress(tab.id);
+      await concealProgress(tab.id);
     } finally {
       await detach(tab.id);
     }
     const docEnd = Math.min(pos.height, pos.y + pos.viewport);
     if (committed > 0 && docEnd <= committed + 1) break;
-    await sleep(90);
+    await sleep(160);
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
     const bytes = base64ToBytes(dataUrl.split(",")[1]);
     if (!previousBytes) {
@@ -855,7 +884,7 @@ async function scrollStitch(tab, cssHeight, info) {
       committed = pos.y + keep;
       continue;
     }
-    const joined = await joinFrame(previousBytes, bytes, committed - pos.y, pos.viewport);
+    const joined = await joinFrame(previousBytes, bytes, committed - pos.y, pos.viewport, overlap);
     if (joined.height < 2) break;
     slices[slices.length - 1] = joined.prevOut;
     slices.push(joined.rows);

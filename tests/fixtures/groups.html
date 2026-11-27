@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Groups</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; }
+      .app { display: grid; grid-template-columns: 240px 1fr; grid-template-rows: 65px 1fr; height: 100%; }
+      header { grid-column: 1 / -1; background: #2449d8; color: #fff; font: 700 16px/65px Arial, sans-serif; padding: 0 16px; }
+      aside { background: #111827; color: #fff; padding: 16px; font: 600 14px Arial, sans-serif; }
+      #list { overflow-y: auto; background: #fff; }
+      .group { position: sticky; top: 0; height: 36px; line-height: 36px; padding: 0 12px; color: #fff; font: 700 13px Arial, sans-serif; z-index: 1; }
+      .row { height: 40px; box-sizing: border-box; border-bottom: 1px solid #e5e7eb; padding: 0 16px; font: 14px/40px Arial, sans-serif; color: #111827; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>List</header>
+      <aside>Spaces</aside>
+      <div id="list"></div>
+    </div>
+    <script>
+      const groups = [
+        ["CONTENT REVIEW", "16,120,92"],
+        ["CONTENT WRITING", "36,73,216"],
+        ["META TAGS", "176,38,92"],
+        ["SEO CHECK", "120,53,15"],
+      ];
+      const list = document.getElementById("list");
+      for (const [name, color] of groups) {
+        const head = document.createElement("div");
+        head.className = "group";
+        head.textContent = name;
+        head.style.background = `rgb(${color})`;
+        list.appendChild(head);
+        for (let i = 1; i <= 8; i += 1) {
+          const row = document.createElement("div");
+          row.className = "row";
+          row.textContent = `${name} ${i}`;
+          list.appendChild(row);
+        }
+      }
+    </script>
+  </body>
+</html>
