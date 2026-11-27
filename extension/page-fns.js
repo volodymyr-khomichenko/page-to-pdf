@@ -29,30 +29,47 @@ export async function preparePage() {
   }
 
   function findScroller() {
-    if (documentRoot.scrollHeight > vh + 240) {
-      return { el: documentRoot, mode: "document", name: "document" };
-    }
-    let best = null;
+    const scrollers = [];
     function walk(node) {
       if (!node?.querySelectorAll) return;
       for (const el of node.querySelectorAll("*")) {
         if (el.shadowRoot) walk(el.shadowRoot);
         const overflow = getComputedStyle(el).overflowY;
         if (overflow !== "auto" && overflow !== "scroll") continue;
+        if (el === documentRoot || el === document.body || el === document.documentElement) continue;
         const rect = el.getBoundingClientRect();
-        if (rect.width < vw * 0.55 || rect.height < vh * 0.55) continue;
-        if (el.scrollHeight < el.clientHeight + 400) continue;
-        if (!best || el.scrollHeight > best.scrollHeight) best = el;
+        scrollers.push({
+          index: scrollers.length,
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          clientHeight: el.clientHeight,
+          scrollHeight: el.scrollHeight,
+          el,
+        });
       }
     }
     walk(document);
-    if (best) return { el: best, mode: "inner", name: scrollerLabel(best) };
-    return { el: documentRoot, mode: "document", name: "document" };
+    const decision = chooseScrollMode({
+      documentScrollHeight: documentRoot.scrollHeight,
+      viewportWidth: vw,
+      viewportHeight: vh,
+      scrollers,
+    });
+    if (decision.mode !== "inner") {
+      return { el: documentRoot, mode: decision.mode, name: "document", box: null };
+    }
+    const picked = scrollers[decision.index];
+    return { el: picked.el, mode: "inner", name: scrollerLabel(picked.el), box: picked };
   }
 
   const scroller = findScroller();
   document.querySelector("[data-wp-scroller]")?.removeAttribute("data-wp-scroller");
-  if (scroller.mode === "inner") scroller.el.setAttribute("data-wp-scroller", scroller.name);
+  if (scroller.mode === "inner") {
+    scroller.el.setAttribute("data-wp-scroller", scroller.name);
+    scroller.el.setAttribute("data-wp-saved-scroll", String(scroller.el.scrollTop || 0));
+  }
   const root = scroller.el;
   if (!document.documentElement.dataset.wpScroll) {
     document.documentElement.dataset.wpScroll = String(root.scrollTop || 0);
@@ -135,15 +152,29 @@ export async function preparePage() {
   }
 
   const fullHeight = root.scrollHeight;
+  let scrollerBox = null;
+  if (scroller.mode === "inner") {
+    const rect = scroller.el.getBoundingClientRect();
+    scrollerBox = {
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+      clientHeight: scroller.el.clientHeight,
+      scrollHeight: scroller.el.scrollHeight,
+    };
+  }
   return {
     cssWidth: vw,
-    cssHeight: Math.min(fullHeight, CAP),
+    cssHeight: scroller.mode === "viewport" ? vh : Math.min(fullHeight, CAP),
     fullHeight,
-    viewportHeight: scroller.mode === "inner" ? root.clientHeight : vh,
+    viewportHeight: vh,
     dpr: window.devicePixelRatio || 1,
-    truncated: fullHeight > CAP,
+    truncated: scroller.mode === "viewport" ? false : fullHeight > CAP,
+    partial: scroller.mode === "viewport",
     scroller: scroller.name,
     scrollMode: scroller.mode,
+    scrollerBox,
   };
 }
 
@@ -394,6 +425,10 @@ export function restorePage() {
   restoreTree(document);
   document.getElementById("wp-hide-style")?.remove();
   document.getElementById("wp-progress")?.remove();
+  for (const el of document.querySelectorAll("[data-wp-saved-scroll]")) {
+    el.scrollTop = Number(el.getAttribute("data-wp-saved-scroll") || 0);
+    el.removeAttribute("data-wp-saved-scroll");
+  }
   document.querySelector("[data-wp-scroller]")?.removeAttribute("data-wp-scroller");
   const behavior = document.documentElement.dataset.wpScrollBehavior;
   if (behavior !== undefined) {

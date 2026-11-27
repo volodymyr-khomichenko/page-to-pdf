@@ -36,7 +36,7 @@ export const englishCopy: LandingCopy = {
   subtitle:
     "Capture a logged-in dashboard or private page as PNG or PDF, then give the file to an AI.",
   cta: "Add to Chrome",
-  storeNote: "Free on the Chrome Web Store.",
+  storeNote: "Version 1.0.10. Free on the Chrome Web Store.",
   installLabel: "How to use",
   steps: [
     {
@@ -90,7 +90,7 @@ export const ukrainianCopy: LandingCopy = {
   subtitle:
     "Знімає сторінку, яку не витягнеш публічно: кабінет, аналітику, адмінку. PDF або PNG можна одразу дати в AI.",
   cta: "Додати в Chrome",
-  storeNote: "Безкоштовно в Chrome Web Store.",
+  storeNote: "Версія 1.0.10. Безкоштовно в Chrome Web Store.",
   installLabel: "Як користуватися",
   steps: [
     {

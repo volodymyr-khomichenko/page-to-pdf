@@ -141,7 +141,7 @@ if (!id) {
       bitmap = await createImageBitmap(stored.blob);
       const notes = [`${bitmap.width} × ${bitmap.height}`];
       if (stored.scaled) notes.push(t("scaledNote"));
-      if (stored.truncated) notes.push(t("truncatedNote"));
+      if (stored.truncated || stored.partial) notes.push(t("truncatedNote"));
       meta.textContent = `${stored.title} · ${notes.join(" · ")}`;
       const path = document.querySelector("#capture-path");
       if (path && stored.capture) {
