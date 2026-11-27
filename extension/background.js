@@ -347,8 +347,19 @@ async function composeInner(tiles, cssWidth) {
   }
   const fullWidth = bitmaps[0].width;
   const scale = fullWidth / Math.max(1, cssWidth);
-  let fullHeight = bitmaps[0].height;
-  for (let i = 1; i < bitmaps.length; i += 1) fullHeight += bitmaps[i].height;
+  const anchor = Math.max(
+    1,
+    Math.min(bitmaps[0].height, tiles[0].scrollerBottom || bitmaps[0].height),
+  );
+  let extra = 0;
+  const strips = [];
+  for (let i = 1; i < bitmaps.length; i += 1) {
+    const bitmap = bitmaps[i];
+    const column = tiles[i].pixelX == null ? Math.round((tiles[i].x || 0) * scale) : tiles[i].pixelX;
+    strips.push({ bitmap, column, width: bitmap.width, height: bitmap.height });
+    extra += bitmap.height;
+  }
+  const fullHeight = Math.max(bitmaps[0].height, anchor + extra);
   let outScale = 1;
   if (fullHeight > 32768) outScale = 32768 / fullHeight;
   if (fullWidth * outScale > 8192) outScale = Math.min(outScale, 8192 / fullWidth);
@@ -362,24 +373,22 @@ async function composeInner(tiles, cssWidth) {
     ctx.drawImage(bitmap, Math.round(x * outScale), Math.round(y * outScale), Math.round(w * outScale), Math.round(h * outScale));
   };
   draw(bitmaps[0], 0, 0, bitmaps[0].width, bitmaps[0].height);
-  let y = bitmaps[0].height;
-  for (let i = 1; i < bitmaps.length; i += 1) {
-    const bitmap = bitmaps[i];
-    const column = tiles[i].pixelX == null ? Math.round((tiles[i].x || 0) * scale) : tiles[i].pixelX;
-    draw(bitmap, column, y, bitmap.width, bitmap.height);
-    y += bitmap.height;
-    bitmap.close();
+  let y = anchor;
+  for (const strip of strips) {
+    draw(strip.bitmap, strip.column, y, strip.width, strip.height);
+    y += strip.height;
+    strip.bitmap.close();
   }
-  if (bitmaps.length > 1) {
-    const column = tiles[1].pixelX == null ? Math.round((tiles[1].x || 0) * scale) : tiles[1].pixelX;
-    const sides = sidebarColumns(bitmaps[0].width, column, bitmaps[1].width);
-    const fromY = Math.round(bitmaps[0].height * outScale);
+  const stripWidth = strips[0]?.width || 0;
+  if (stripWidth >= 2) {
+    const sides = sidebarColumns(fullWidth, strips[0].column, stripWidth);
+    const fromY = Math.round(Math.min(bitmaps[0].height, anchor) * outScale);
     const stretch = (side) => {
       if (!side || height <= fromY) return;
       ctx.drawImage(
         bitmaps[0],
         side.x,
-        bitmaps[0].height - 1,
+        Math.max(0, Math.min(bitmaps[0].height, anchor) - 1),
         side.width,
         1,
         Math.round(side.x * outScale),
@@ -453,7 +462,11 @@ async function captureInner(tabId, info) {
   const firstSize = pngSize(first);
   const scaleX = firstSize ? firstSize.width / Math.max(1, info.cssWidth) : info.dpr || 1;
   const scaleY = firstSize ? firstSize.height / viewport : info.dpr || 1;
-  tiles.push({ bytes: first, full: true });
+  tiles.push({
+    bytes: first,
+    full: true,
+    scrollerBottom: Math.round((box.top + clientHeight) * scaleY),
+  });
 
   let guard = 0;
   while (guard < 80) {

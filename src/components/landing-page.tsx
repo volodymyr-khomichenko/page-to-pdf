@@ -41,7 +41,7 @@ export const englishCopy: LandingCopy = {
     "Capture a logged-in dashboard or private page as PNG or PDF, then give the file to an AI.",
   cta: "Add to Chrome",
   download: "Download page-to-pdf.zip",
-  version: "Version 1.0.11.",
+  version: "Version 1.0.12.",
   storeNote: "Chrome Web Store, or the zip while the listing is not up yet.",
   installLabel: "How to use",
   steps: [
@@ -92,7 +92,7 @@ export const ukrainianCopy: LandingCopy = {
     "Знімає сторінку, яку не витягнеш публічно: кабінет, аналітику, адмінку. PDF або PNG можна одразу дати в AI.",
   cta: "Додати в Chrome",
   download: "Скачати page-to-pdf.zip",
-  version: "Версія 1.0.11.",
+  version: "Версія 1.0.12.",
   storeNote: "Chrome Web Store або архів, поки картки в магазині ще немає.",
   installLabel: "Як користуватися",
   steps: [
@@ -143,7 +143,18 @@ export const alternateLinks = [
   { rel: "alternate", hrefLang: "x-default", href: `${SITE}/` },
 ];
 
+const zipInstall = {
+  en: "Download page-to-pdf.zip, unzip it, open chrome://extensions, turn on Developer mode, and choose the page-to-pdf folder.",
+  uk: "Скачайте page-to-pdf.zip, розпакуйте, відкрийте chrome://extensions, увімкніть режим розробника і виберіть папку page-to-pdf.",
+};
+
 export function LandingPage({ copy }: { copy: LandingCopy }) {
+  const steps = copy.steps.map((step, index) =>
+    index === 0 && !CHROME_STORE_LISTED ? { ...step, text: zipInstall[copy.lang] } : step,
+  );
+  const how = copy.how.map((item, index) =>
+    index === 0 && !CHROME_STORE_LISTED ? zipInstall[copy.lang] : item,
+  );
   return (
     <div className="min-h-screen bg-white">
       <header className="border-b border-line bg-white">
@@ -199,7 +210,7 @@ export function LandingPage({ copy }: { copy: LandingCopy }) {
         </section>
 
         <section className="grid gap-8 border-t border-line pt-10 md:grid-cols-3" aria-label={copy.installLabel}>
-          {copy.steps.map((step, index) => (
+          {steps.map((step, index) => (
             <article key={step.title}>
               <p className="text-sm font-bold text-stamp">{String(index + 1).padStart(2, "0")}</p>
               <h2 className="mt-2 text-xl font-bold text-ink">{step.title}</h2>
@@ -212,7 +223,7 @@ export function LandingPage({ copy }: { copy: LandingCopy }) {
           <div>
             <h2 className="text-3xl font-bold text-ink">{copy.howTitle}</h2>
             <ol className="mt-5 flex list-decimal flex-col gap-3 pl-5 leading-relaxed">
-              {copy.how.map((item) => (
+              {how.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ol>
