@@ -148,7 +148,7 @@ export function matchBandOffset({
   const end = Math.min(frameHeight - bandHeight, guess + windowPx);
   if (end < start) return { matched: false, flat, mean: Infinity, cut: null };
   let best = Infinity;
-  let bestTop = Math.min(Math.max(guess, start), end);
+  const scores = [];
   const denom = bandHeight * width;
   for (let y = start; y <= end; y += 1) {
     let diff = 0;
@@ -161,12 +161,21 @@ export function matchBandOffset({
       }
     }
     const mean = diff / denom;
-    if (mean < best) {
-      best = mean;
-      bestTop = y;
-      if (mean === 0) break;
+    scores.push({ y, mean });
+    if (mean < best) best = mean;
+  }
+  let chosen = scores[0];
+  let chosenDist = Math.abs(chosen.y - guess);
+  for (const score of scores) {
+    if (score.mean > best + 0.75) continue;
+    const dist = Math.abs(score.y - guess);
+    if (score.mean < chosen.mean - 0.75 || dist < chosenDist) {
+      chosen = score;
+      chosenDist = dist;
     }
   }
-  if (flat || best > threshold) return { matched: false, flat, mean: best, cut: null, top: bestTop };
-  return { matched: true, flat: false, mean: best, cut: bestTop + bandHeight, top: bestTop };
+  if (flat || chosen.mean > threshold) {
+    return { matched: false, flat, mean: chosen.mean, cut: null, top: chosen.y };
+  }
+  return { matched: true, flat: false, mean: chosen.mean, cut: chosen.y + bandHeight, top: chosen.y };
 }

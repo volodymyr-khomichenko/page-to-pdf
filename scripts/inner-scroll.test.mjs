@@ -172,6 +172,22 @@ test("pixel match finds a shifted join and rejects a flat band", () => {
   });
   assert.equal(missed.matched, false);
   assert.equal(missed.flat, true);
+
+  const repeat = new Uint8Array(width * frameHeight);
+  for (let y = 0; y < frameHeight; y += 1) {
+    for (let x = 0; x < width; x += 1) repeat[y * width + x] = ((y % 10) * 9 + x) % 251;
+  }
+  const tied = matchBandOffset({
+    band: repeat.subarray(20 * width, 40 * width),
+    bandWidth: width,
+    bandHeight,
+    frame: repeat,
+    frameWidth: width,
+    frameHeight,
+    expectedTop: 20,
+  });
+  assert.equal(tied.matched, true);
+  assert.equal(tied.top, 20);
 });
 
 test("the sidebar column continues beside the scroller", () => {

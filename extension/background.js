@@ -343,6 +343,108 @@ async function cropDevicePixels(bytes, rect) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+const SEAM_BLEND = 8;
+
+async function fadeBytes(prevBytes, frameBytes, cut, blend) {
+  const prev = await createImageBitmap(new Blob([prevBytes], { type: "image/png" }));
+  const frame = await createImageBitmap(new Blob([frameBytes], { type: "image/png" }));
+  const width = prev.width;
+  if (frame.width !== width || cut < blend || cut > frame.height || prev.height < blend) {
+    prev.close();
+    frame.close();
+    return prevBytes;
+  }
+  const canvas = new OffscreenCanvas(width, prev.height);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(prev, 0, 0);
+  const old = ctx.getImageData(0, prev.height - blend, width, blend);
+  const scratch = new OffscreenCanvas(width, blend);
+  const scratchCtx = scratch.getContext("2d", { willReadFrequently: true });
+  scratchCtx.drawImage(frame, 0, cut - blend, width, blend, 0, 0, width, blend);
+  const incoming = scratchCtx.getImageData(0, 0, width, blend);
+  const before = old.data;
+  const after = incoming.data;
+  for (let row = 0; row < blend; row += 1) {
+    const alpha = (row + 1) / (blend + 1);
+    const keep = 1 - alpha;
+    const start = row * width * 4;
+    for (let i = start; i < start + width * 4; i += 4) {
+      before[i] = before[i] * keep + after[i] * alpha;
+      before[i + 1] = before[i + 1] * keep + after[i + 1] * alpha;
+      before[i + 2] = before[i + 2] * keep + after[i + 2] * alpha;
+    }
+  }
+  ctx.putImageData(old, 0, prev.height - blend);
+  prev.close();
+  frame.close();
+  const blob = await canvas.convertToBlob({ type: "image/png" });
+  if (!blob) return prevBytes;
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+async function joinFrame(previousBytes, frameBytes, expectedCss, viewportCss) {
+  const view = await imageGray(frameBytes);
+  const scale = view.height / Math.max(1, viewportCss);
+  const expectedCut = Math.round(Math.max(0, expectedCss) * scale);
+  let cut = Math.max(0, Math.min(view.height - 1, expectedCut));
+  if (previousBytes && expectedCss > 8) {
+    const previous = await imageGray(previousBytes);
+    const bandH = Math.min(
+      previous.height - 1,
+      Math.max(8, Math.round((INNER_OVERLAP - INNER_BAND_MARGIN) * scale)),
+    );
+    if (bandH >= 8 && expectedCut > bandH && bandH < view.height && previous.width === view.width) {
+      const band = previous.gray.subarray((previous.height - bandH) * previous.width);
+      const match = matchBandOffset({
+        band,
+        bandWidth: previous.width,
+        bandHeight: bandH,
+        frame: view.gray,
+        frameWidth: view.width,
+        frameHeight: view.height,
+        expectedTop: expectedCut - bandH,
+      });
+      if (match.matched) cut = match.cut;
+    }
+  }
+  const blend = Math.max(0, Math.min(SEAM_BLEND, cut));
+  const prevOut =
+    previousBytes && blend >= 2 ? await fadeBytes(previousBytes, frameBytes, cut, blend) : previousBytes;
+  const rows = await cropDevicePixels(frameBytes, {
+    x: 0,
+    y: cut,
+    width: view.width,
+    height: Math.max(1, view.height - cut),
+  });
+  return { rows, prevOut, height: view.height - cut };
+}
+
+function paintStrip(ctx, bitmap, x, y, blend) {
+  const width = bitmap.width;
+  const fresh = bitmap.height - blend;
+  if (blend >= 2 && y >= blend && x >= 0) {
+    const old = ctx.getImageData(x, y - blend, width, blend);
+    const scratch = new OffscreenCanvas(width, blend);
+    const scratchCtx = scratch.getContext("2d", { willReadFrequently: true });
+    scratchCtx.drawImage(bitmap, 0, 0, width, blend, 0, 0, width, blend);
+    const incoming = scratchCtx.getImageData(0, 0, width, blend);
+    const before = old.data;
+    const after = incoming.data;
+    for (let row = 0; row < blend; row += 1) {
+      const alpha = (row + 1) / (blend + 1);
+      const keep = 1 - alpha;
+      const start = row * width * 4;
+      for (let i = start; i < start + width * 4; i += 4) {
+        before[i] = before[i] * keep + after[i] * alpha;
+        before[i + 1] = before[i + 1] * keep + after[i + 1] * alpha;
+        before[i + 2] = before[i + 2] * keep + after[i + 2] * alpha;
+      }
+    }
+    ctx.putImageData(old, x, y - blend);
+  }
+  if (fresh > 0) ctx.drawImage(bitmap, 0, blend, width, fresh, x, y, width, fresh);
+}
+
 async function composeInner(tiles, cssWidth) {
   const bitmaps = [];
   for (const tile of tiles) {
@@ -359,8 +461,8 @@ async function composeInner(tiles, cssWidth) {
   for (let i = 1; i < bitmaps.length; i += 1) {
     const bitmap = bitmaps[i];
     const column = tiles[i].pixelX == null ? Math.round((tiles[i].x || 0) * scale) : tiles[i].pixelX;
-    strips.push({ bitmap, column, width: bitmap.width, height: bitmap.height });
-    extra += bitmap.height;
+    strips.push({ bitmap, column, width: bitmap.width, height: bitmap.height, blend: tiles[i].blend || 0 });
+    extra += bitmap.height - (tiles[i].blend || 0);
   }
   const fullHeight = Math.max(bitmaps[0].height, anchor + extra);
   let outScale = 1;
@@ -369,7 +471,7 @@ async function composeInner(tiles, cssWidth) {
   const width = Math.max(1, Math.round(fullWidth * outScale));
   const height = Math.max(1, Math.round(fullHeight * outScale));
   const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
   const draw = (bitmap, x, y, w, h) => {
@@ -378,8 +480,24 @@ async function composeInner(tiles, cssWidth) {
   draw(bitmaps[0], 0, 0, bitmaps[0].width, bitmaps[0].height);
   let y = anchor;
   for (const strip of strips) {
-    draw(strip.bitmap, strip.column, y, strip.width, strip.height);
-    y += strip.height;
+    const skip = strip.blend || 0;
+    const blend = outScale > 0.999 ? skip : 0;
+    if (blend >= 2) {
+      paintStrip(ctx, strip.bitmap, strip.column, y, blend);
+    } else {
+      ctx.drawImage(
+        strip.bitmap,
+        0,
+        skip,
+        strip.width,
+        Math.max(1, strip.height - skip),
+        Math.round(strip.column * outScale),
+        Math.round(y * outScale),
+        Math.round(strip.width * outScale),
+        Math.max(1, Math.round((strip.height - skip) * outScale)),
+      );
+    }
+    y += strip.height - skip;
     strip.bitmap.close();
   }
   const stripWidth = strips[0]?.width || 0;
@@ -555,16 +673,18 @@ async function captureInner(tabId, info) {
       });
       if (match.matched) cut = match.cut;
     }
+    const blend = Math.max(0, Math.min(SEAM_BLEND, cut));
     if (view.height - cut >= 2) {
       tiles.push({
         bytes: await cropDevicePixels(viewBytes, {
           x: 0,
-          y: cut,
+          y: Math.max(0, cut - blend),
           width: view.width,
-          height: view.height - cut,
+          height: view.height - Math.max(0, cut - blend),
         }),
         x: box.left,
         pixelX: rect.x,
+        blend,
       });
       hidden.push(0);
     } else if (scrollTop >= maxScroll - 1) {
@@ -642,16 +762,19 @@ async function hideForSlice(tabId) {
 
 async function captureSurface(tabId, info) {
   const cssHeight = Math.max(1, Math.round(info.cssHeight));
+  const viewport = Math.max(1, info.viewportHeight || 800);
   const tiles = [];
   const hidden = [];
-  let covered = 0;
+  let committed = 0;
+  let previousBytes = null;
   let guard = 0;
-  const total = Math.max(1, Math.ceil(cssHeight / Math.max(1, info.viewportHeight || 800)));
-  while (covered < cssHeight - 1 && guard < 80) {
+  const total = Math.max(1, Math.ceil(cssHeight / Math.max(1, viewport - INNER_OVERLAP)));
+  while (committed < cssHeight - 1 && guard < 80) {
     guard += 1;
+    const target = committed === 0 ? 0 : Math.max(0, committed - INNER_OVERLAP);
     await showProgress(tabId, tiles.length + 1, total);
-    const pos = await settleScroll(tabId, covered);
-    if (covered > 0) {
+    const pos = await settleScroll(tabId, target);
+    if (committed > 0) {
       const report = await hideForSlice(tabId);
       hidden.push(report?.count || 0);
     } else {
@@ -659,17 +782,27 @@ async function captureSurface(tabId, info) {
     }
     await waitForSlice(tabId);
     const docEnd = Math.min(cssHeight, pos.y + pos.viewport);
-    const start = Math.max(covered, pos.y);
-    const keep = docEnd - start;
-    if (keep <= 1) break;
+    if (committed > 0 && docEnd <= committed + 1) break;
     await clearProgress(tabId);
     const tile = await grabViewport(tabId);
     if (surfaceTooTall(tile, pos.viewport)) {
       console.info("[page-to-pdf] surface taller than the viewport, using scroll-stitch");
       return null;
     }
-    tiles.push(await cropSlice(tile, start - pos.y, keep, pos.viewport));
-    covered = start + keep;
+    if (!previousBytes) {
+      const keep = Math.max(1, docEnd - pos.y);
+      const first = await cropSlice(tile, 0, keep, pos.viewport);
+      tiles.push(first);
+      previousBytes = first;
+      committed = pos.y + keep;
+      continue;
+    }
+    const joined = await joinFrame(previousBytes, tile, committed - pos.y, pos.viewport);
+    if (joined.height < 2) break;
+    tiles[tiles.length - 1] = joined.prevOut;
+    tiles.push(joined.rows);
+    previousBytes = tile;
+    committed = docEnd;
   }
   await clearProgress(tabId);
   if (!tiles.length) return null;
@@ -680,18 +813,20 @@ async function captureSurface(tabId, info) {
 async function scrollStitch(tab, cssHeight, info) {
   const slices = [];
   const hidden = [];
-  let covered = 0;
+  let committed = 0;
+  let previousBytes = null;
   let guard = 0;
   const viewportGuess = Math.max(1, info?.viewportHeight || 800);
-  const total = Math.max(1, Math.ceil(cssHeight / viewportGuess));
-  while (covered < cssHeight - 1 && guard < 80) {
+  const total = Math.max(1, Math.ceil(cssHeight / Math.max(1, viewportGuess - INNER_OVERLAP)));
+  while (committed < cssHeight - 1 && guard < 80) {
     guard += 1;
+    const target = committed === 0 ? 0 : Math.max(0, committed - INNER_OVERLAP);
     await attach(tab.id);
     let pos;
     try {
       await showProgress(tab.id, slices.length + 1, total);
-      const settled = await settleScroll(tab.id, covered);
-      if (covered > 0) {
+      const settled = await settleScroll(tab.id, target);
+      if (committed > 0) {
         const report = await hideForSlice(tab.id);
         hidden.push(report?.count || 0);
       } else {
@@ -707,24 +842,25 @@ async function scrollStitch(tab, cssHeight, info) {
     } finally {
       await detach(tab.id);
     }
+    const docEnd = Math.min(pos.height, pos.y + pos.viewport);
+    if (committed > 0 && docEnd <= committed + 1) break;
     await sleep(90);
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
     const bytes = base64ToBytes(dataUrl.split(",")[1]);
-    const docEnd = Math.min(pos.height, pos.y + pos.viewport);
-    const needStart = Math.max(covered, pos.y);
-    const keep = docEnd - needStart;
-    if (keep <= 1) break;
-    const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
-    const pxPerCss = bitmap.height / Math.max(1, pos.viewport);
-    const cropTop = Math.max(0, Math.round((needStart - pos.y) * pxPerCss));
-    const cropH = Math.max(1, Math.min(bitmap.height - cropTop, Math.round(keep * pxPerCss)));
-    const canvas = new OffscreenCanvas(bitmap.width, cropH);
-    canvas.getContext("2d").drawImage(bitmap, 0, cropTop, bitmap.width, cropH, 0, 0, bitmap.width, cropH);
-    bitmap.close();
-    const blob = await canvas.convertToBlob({ type: "image/png" });
-    if (!blob) throw new Error(t("imageTooBig"));
-    slices.push(new Uint8Array(await blob.arrayBuffer()));
-    covered = needStart + keep;
+    if (!previousBytes) {
+      const keep = Math.max(1, docEnd - pos.y);
+      const first = await cropSlice(bytes, 0, keep, pos.viewport);
+      slices.push(first);
+      previousBytes = first;
+      committed = pos.y + keep;
+      continue;
+    }
+    const joined = await joinFrame(previousBytes, bytes, committed - pos.y, pos.viewport);
+    if (joined.height < 2) break;
+    slices[slices.length - 1] = joined.prevOut;
+    slices.push(joined.rows);
+    previousBytes = bytes;
+    committed = docEnd;
   }
   if (!slices.length) throw new Error(t("stitchFailed"));
   const image = await shotToPng(slices);
