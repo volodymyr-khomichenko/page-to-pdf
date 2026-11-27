@@ -59,21 +59,28 @@ async function captureInbox(height, dpr, executablePath, pageHtml = html) {
       executablePath,
       headless: false,
       defaultViewport: null,
+      // Branded Chrome 137+ ignores --load-extension, and Puppeteer adds
+      // --disable-extensions unless this is set. Extensions.loadUnpacked is
+      // only available on the browser pipe.
+      pipe: true,
+      enableExtensions: true,
+      ignoreDefaultArgs: ["--disable-extensions"],
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--headless=new",
         `--force-device-scale-factor=${dpr}`,
-        `--disable-extensions-except=${ext}`,
-        `--load-extension=${ext}`,
         "--silent-debugger-extension-api",
         "--no-first-run",
         "--window-size=1920,1200",
       ],
     });
-    const workerTarget = await browser.waitForTarget((target) => target.type() === "service_worker", {
-      timeout: 15000,
-    });
+    // installExtension sends Extensions.loadUnpacked on the browser target.
+    const extensionId = await browser.installExtension(ext);
+    const workerTarget = await browser.waitForTarget(
+      (target) => target.type() === "service_worker" && target.url().includes(extensionId),
+      { timeout: 15000 },
+    );
     const worker = await workerTarget.worker();
     const page = (await browser.pages())[0] || (await browser.newPage());
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load" });
